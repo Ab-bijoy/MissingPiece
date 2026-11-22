@@ -1,6 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { env } from '../lib/env'
 import { mockAuth } from '../api/mock/mockAuth'
+import { AccountExistsError } from './AccountExistsError'
+
+export { AccountExistsError }
 
 /**
  * Supabase is used only for identity (build prompt 1 and 3): sign-up, the
@@ -37,8 +40,16 @@ function supabaseAuth(client: SupabaseClient): AuthService {
   }
   return {
     async signUp(email, password) {
-      const { error } = await client.auth.signUp({ email, password })
+      const { data, error } = await client.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/login` },
+      })
+      if (error && error.message.toLowerCase().includes('already registered')) throw new AccountExistsError()
       check(error)
+      // With email confirmation on, Supabase does not say "already exists" (so emails cannot be
+      // guessed); it returns a user with no identities instead.
+      if (data.user && data.user.identities?.length === 0) throw new AccountExistsError()
     },
     async verifyOtp(email, token) {
       const { error } = await client.auth.verifyOtp({ email, token, type: 'signup' })

@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -223,3 +223,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 .claude
+
+# Local document uploads (backend dev storage)
+backend/uploads/
+docs/

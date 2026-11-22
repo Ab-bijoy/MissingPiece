@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { authService } from '../../../auth/authService'
+import { AccountExistsError, authService } from '../../../auth/authService'
+import { useAuth } from '../../../auth/AuthProvider'
+import { resumeSignup } from '../../../auth/resumeSignup'
 import { pendingSignup } from '../../../auth/pendingSignup'
 import { TextField } from '../../../components/ui/Field'
 import Notice from '../../../components/ui/Notice'
@@ -10,6 +12,7 @@ import AuthLayout, { AuthHeading } from './AuthLayout'
 /** Personal account (build prompt 3.4 step 1): form → Supabase sign-up → email code. */
 export default function SignupUserPage() {
   const navigate = useNavigate()
+  const { loadMe } = useAuth()
   const prev = pendingSignup.get()
   const start = prev?.role === 'general' ? prev : null
 
@@ -37,7 +40,13 @@ export default function SignupUserPage() {
     if (!validate()) return
     setBusy(true)
     try {
-      await authService.signUp(email.trim(), password)
+      try {
+        await authService.signUp(email.trim(), password)
+      } catch (err) {
+        // Email confirmed earlier but no profile yet: log in and finish instead.
+        if (!(err instanceof AccountExistsError)) throw err
+        await resumeSignup(email.trim(), password, loadMe)
+      }
       pendingSignup.set({ role: 'general', email: email.trim(), name: name.trim(), age: age ? Number(age) : null })
       navigate('/verify-email')
     } catch (err) {

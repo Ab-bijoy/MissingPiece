@@ -5,6 +5,7 @@ import { sponsorApi, usePaymentQuote, useSponsorAction } from '../../api/sponsor
 import { Card, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
 import { bdt } from '../../lib/format'
+import { safeHttpUrl } from '../../lib/safe'
 
 const METHODS = [
   { key: 'wallet', label: 'Mobile wallet' },
@@ -37,8 +38,11 @@ export default function SponsorPay() {
     pay.mutate(undefined, {
       onSuccess: (res) => {
         // The gateway's secure page. In demo mode it is a page inside this app.
-        if (res.checkout_url.startsWith('/')) navigate(res.checkout_url)
-        else window.location.assign(res.checkout_url)
+        if (res.checkout_url.startsWith('/') && !res.checkout_url.startsWith('//')) navigate(res.checkout_url)
+        else {
+          const safe = safeHttpUrl(res.checkout_url)
+          if (safe) window.location.assign(safe)
+        }
       },
     })
   }

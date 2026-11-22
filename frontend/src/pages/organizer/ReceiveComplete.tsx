@@ -5,6 +5,7 @@ import type { Need, Offer } from '../../api/types'
 import { Card, EmptyNote, Pill, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
 import { bdt, qtyText, slotText } from '../../lib/format'
+import { csvCell } from '../../lib/safe'
 import { useTrackProject } from './OrganizerLayout'
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Please try again.')
@@ -40,7 +41,7 @@ export default function ReceiveComplete() {
       ['Needs received', `${report.needs_received} of ${report.needs_total}`],
       ['Items received', report.items_received.join('; ')],
     ]
-    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n')
+    const csv = rows.map((r) => r.map(csvCell).join(',')).join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
     const a = Object.assign(document.createElement('a'), { href: url, download: `${project!.name} report.csv` })
     a.click()

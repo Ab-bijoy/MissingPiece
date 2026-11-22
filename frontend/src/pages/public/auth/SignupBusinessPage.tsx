@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { authService } from '../../../auth/authService'
+import { AccountExistsError, authService } from '../../../auth/authService'
+import { useAuth } from '../../../auth/AuthProvider'
+import { resumeSignup } from '../../../auth/resumeSignup'
 import { pendingSignup } from '../../../auth/pendingSignup'
 import { FileField, fileProblem, SelectField, TextField } from '../../../components/ui/Field'
 import Notice from '../../../components/ui/Notice'
@@ -76,6 +78,7 @@ const CONFIG: Record<
 export default function SignupBusinessPage({ role }: { role: Role }) {
   const c = CONFIG[role]
   const navigate = useNavigate()
+  const { loadMe } = useAuth()
   const prev = pendingSignup.get()
   const start = prev && prev.role === role ? prev : null
 
@@ -108,7 +111,13 @@ export default function SignupBusinessPage({ role }: { role: Role }) {
     if (!validate()) return
     setBusy(true)
     try {
-      await authService.signUp(email.trim(), password)
+      try {
+        await authService.signUp(email.trim(), password)
+      } catch (err) {
+        // Email confirmed earlier but no profile yet: log in and finish instead.
+        if (!(err instanceof AccountExistsError)) throw err
+        await resumeSignup(email.trim(), password, loadMe)
+      }
       pendingSignup.set({
         role,
         email: email.trim(),

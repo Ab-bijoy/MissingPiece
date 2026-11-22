@@ -431,6 +431,9 @@ export type RegistrationSummary = {
   kind: string
   sent_at: string
   status: AccountStatus
+  /** Which admin decided, and when (null while pending) */
+  reviewed_by_name: string | null
+  reviewed_at: string | null
 }
 
 export type RegistrationDocument = {
@@ -450,6 +453,8 @@ export type RegistrationDetail = {
   name: string
   sent_at: string
   rejection_note: string | null
+  reviewed_by_name: string | null
+  reviewed_at: string | null
   profile: OrganizerProfile | SponsorProfile
   documents: RegistrationDocument[]
 }

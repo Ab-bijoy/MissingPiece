@@ -6,6 +6,7 @@ import type { OrganizerProfile, RegistrationDetail, RegistrationStatus, SponsorP
 import { Card, EmptyNote, Pill, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
 import { timeAgo } from '../../lib/format'
+import { safeHttpUrl } from '../../lib/safe'
 
 const ORG_TYPE = { ngo: 'NGO', university: 'University club or office', community_group: 'Community group' }
 const TABS: { key: RegistrationStatus; label: string }[] = [
@@ -79,6 +80,11 @@ export default function AdminApprovals() {
                     <span className="block text-sm text-ink-soft">
                       {r.kind} · sent {timeAgo(r.sent_at).toLowerCase()}
                     </span>
+                    {r.reviewed_by_name && (
+                      <span className="block text-sm text-ink-soft">
+                        {r.status === 'rejected' ? 'Rejected' : 'Approved'} by {r.reviewed_by_name}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -120,7 +126,8 @@ function Detail({ id, onBack }: { id: string; onBack: () => void }) {
     setFileMsg(null)
     try {
       const { url } = await adminApi.fileLink(docId)
-      if (url) window.open(url, '_blank', 'noopener')
+      const safe = safeHttpUrl(url)
+      if (safe) window.open(safe, '_blank', 'noopener,noreferrer')
       else setFileMsg('Demo mode keeps no file contents. With the real back end this opens a short-lived download link.')
     } catch (e) {
       setFileMsg(e instanceof Error ? e.message : 'Could not open the file.')
@@ -206,13 +213,21 @@ function Detail({ id, onBack }: { id: string; onBack: () => void }) {
         ) : (
           <div className="mt-6">
             <Notice tone={r.status === 'rejected' ? 'warning' : 'success'}>
-              {r.status === 'rejected' ? `Rejected. Note sent: “${r.rejection_note ?? ''}”` : 'Approved. They can log in.'}
+              {r.status === 'rejected' ? 'Rejected' : 'Approved'}
+              {r.reviewed_by_name ? ` by ${r.reviewed_by_name}` : ''}
+              {r.reviewed_at ? ` on ${whenText(r.reviewed_at)}` : ''}.{' '}
+              {r.status === 'rejected' ? `Note sent: “${r.rejection_note ?? ''}”` : 'They can log in.'}
             </Notice>
           </div>
         )}
       </Card>
     </div>
   )
+}
+
+/** "23 Nov 2026, 14:05" in Bangladesh time */
+function whenText(iso: string) {
+  return new Date(iso).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Dhaka' })
 }
 
 function statusPill(r: RegistrationDetail) {

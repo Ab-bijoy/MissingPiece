@@ -53,7 +53,7 @@ export function handleAdmin(method: string, path: string, body: unknown, me: Me,
       .filter((a) => a.user && (a.user.role === 'organizer' || a.user.role === 'sponsor') && want.includes(a.user.status))
       .map((a) => ({
         user_id: a.user!.id, name: a.user!.name, role: a.user!.role as 'organizer' | 'sponsor', kind: kindOf(a.user!),
-        sent_at: accountMeta(a.user!).sent_at, status: a.user!.status,
+        sent_at: accountMeta(a.user!).sent_at, status: a.user!.status, reviewed_by_name: null, reviewed_at: null,
       }))
       .sort((a, b) => b.sent_at.localeCompare(a.sent_at))
     return ok(list)
@@ -67,7 +67,8 @@ export function handleAdmin(method: string, path: string, body: unknown, me: Me,
     if (!g[2] && method === 'GET') {
       const d: RegistrationDetail = {
         user_id: u.id, role: u.role as 'organizer' | 'sponsor', status: u.status, email: u.email, name: u.name, sent_at: meta.sent_at,
-        rejection_note: u.rejection_note, profile: u.profile as OrganizerProfile | SponsorProfile, documents: meta.documents,
+        rejection_note: u.rejection_note, reviewed_by_name: null, reviewed_at: null,
+        profile: u.profile as OrganizerProfile | SponsorProfile, documents: meta.documents,
       }
       return ok(d)
     }

@@ -1,3 +1,4 @@
+import { AccountExistsError } from '../../auth/AccountExistsError'
 import type { AuthService } from '../../auth/authService'
 import { DEMO_OTP, mockDb } from './mockDb'
 
@@ -46,7 +47,7 @@ export const mockAuth: AuthService = {
   async signUp(email, password) {
     await wait()
     const existing = mockDb.byEmail(email)
-    if (existing?.confirmed) throw new Error('An account with this email already exists. Try logging in.')
+    if (existing?.confirmed) throw new AccountExistsError()
     if (existing) {
       existing.password = password
     } else {
