@@ -65,7 +65,11 @@ function supabaseAuth(client: SupabaseClient): AuthService {
       check(error)
     },
     async signOut() {
-      await client.auth.signOut()
+      // 'local' clears this browser's session first, so logging out never depends on the
+      // network. (The default 'global' keeps the session when the request to Supabase fails,
+      // which left people signed in as the old account.) Supabase still revokes the token.
+      const { error } = await client.auth.signOut({ scope: 'local' })
+      if (error) console.warn('Supabase sign-out request failed; this browser is signed out anyway.', error.message)
     },
     async resetPassword(email) {
       const { error } = await client.auth.resetPasswordForEmail(email, {

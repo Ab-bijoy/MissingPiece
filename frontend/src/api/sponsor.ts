@@ -26,8 +26,8 @@ export const sponsorApi = {
   offers: () => api<SponsorOfferRow[]>('/sponsor/offers'),
   withdraw: (offerId: string) => api<void>(`/offers/${offerId}/withdraw`, { method: 'POST' }),
   quote: (offerId: string) => api<PaymentQuote>(`/offers/${offerId}/payment-quote`),
-  pay: (offerId: string, method: string) =>
-    api<PaymentStart>(`/offers/${offerId}/payments`, { method: 'POST', json: { method } }),
+  // The sponsor picks card, wallet or bank on the payment provider's own page.
+  pay: (offerId: string) => api<PaymentStart>(`/offers/${offerId}/payments`, { method: 'POST', json: {} }),
   report: (projectId: string) => api<SponsorReport>(`/sponsor/reports/${projectId}`),
   profile: () => api<SponsorProfile>('/sponsor/profile'),
   saveProfile: (body: Partial<SponsorProfile>) => api<SponsorProfile>('/sponsor/profile', { method: 'PATCH', json: body }),

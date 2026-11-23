@@ -65,9 +65,12 @@ export default function LoginPage({ role }: { role: UserRole }) {
   const [busy, setBusy] = useState(false)
 
   // A guard sent us here because the account cannot use this area: end that session.
+  // Then drop the notice from history, so a reload or Back does not show it again.
   useEffect(() => {
-    if (state?.notice) void signOut()
-  }, [state?.notice, signOut])
+    if (!state?.notice) return
+    void signOut()
+    navigate(location.pathname, { replace: true, state: state.from ? { from: state.from } : null })
+  }, [state?.notice, state?.from, signOut, navigate, location.pathname])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
