@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { sponsorApi, usePrefetchSponsor, useSponsorAction, useSponsorOffers } from '../../api/sponsor'
 import type { OfferStage, SponsorOfferRow } from '../../api/types'
@@ -20,6 +22,21 @@ export default function SponsorOffers() {
   const [params] = useSearchParams()
   const withdraw = useSponsorAction((id: string) => sponsorApi.withdraw(id))
   const paid = params.get('payment')
+  const qc = useQueryClient()
+
+  // Back from the payment page (a full page load for SSLCommerz): the saved offers
+  // still say "Pay now", so load them again. Once more a moment later in case the
+  // gateway's confirmation reached the server just after the browser came back.
+  useEffect(() => {
+    if (!paid) return
+    const refresh = () => {
+      void qc.invalidateQueries({ queryKey: ['sponsor'] })
+      void qc.invalidateQueries({ queryKey: ['notifications'] })
+    }
+    refresh()
+    const again = setTimeout(refresh, 3000)
+    return () => clearTimeout(again)
+  }, [paid, qc])
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

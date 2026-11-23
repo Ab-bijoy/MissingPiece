@@ -117,3 +117,66 @@ def test_sponsor_lists_do_not_grow(client, scene, f, db):
         client.post(f"/api/requests/{r.id}/offers", json={}, headers=h)
     assert queries_for(client, "/api/sponsor/requests", h) == inbox_one
     assert queries_for(client, "/api/sponsor/offers", h) == offers_one
+
+
+def test_organizer_pages_do_not_grow(client, f, db):
+    """Organizer list pages: the same queries for 1 need/sponsor/member as for 5."""
+    from datetime import date, timedelta
+
+    from app.models import EventMembership, SponsorMatch
+    from app.models.enums import MatchStatus
+
+    org = auth(f.user(UserRole.organizer, "Budget Org"))
+
+    def project(n):
+        needs = [
+            {"type": "money", "title": f"Fund {i}", "quantity": 1000, "unit": "BDT", "budget_item": "x"}
+            for i in range(n)
+        ]
+        body = {
+            "template_id": None,
+            "name": f"P{n}",
+            "purpose": "p",
+            "description": "d",
+            "event_date": str(date.today() + timedelta(days=30)),
+            "venue": "v",
+            "audience": 50,
+            "institution": None,
+            "needs": needs,
+        }
+        p = client.post("/api/projects", json=body, headers=org).json()
+        for i, need in enumerate(p["needs"]):
+            s = f.user(UserRole.sponsor, f"Budget Sponsor {n}-{i}")
+            db.add(
+                SponsorMatch(project_id=p["id"], sponsor_id=s.id, score=50, reason="r", status=MatchStatus.suggested)
+            )
+            req = {
+                "need_id": need["id"],
+                "sponsor_id": str(s.id),
+                "benefits": ["A"],
+                "conditions": None,
+                "exclusive_category": None,
+                "decide_by": None,
+                "deliver_by": None,
+            }
+            r = client.post(f"/api/projects/{p['id']}/requests", json=req, headers=org).json()
+            client.post(f"/api/requests/{r['id']}/offers", json={}, headers=auth(s))
+            member = f.user(UserRole.general, f"Budget Member {n}-{i}")
+            db.add(
+                EventMembership(
+                    user_id=member.id,
+                    project_id=p["id"],
+                    role=MembershipRole.participant,
+                    status=MembershipStatus.approved,
+                )
+            )
+        db.flush()
+        return p["id"]
+
+    def counts(pid):
+        paths = ["", "/gaps", "/readiness", "/report", "/offers", "/sponsor-matches", "/requests", "/memberships"]
+        return {path or "detail": queries_for(client, f"/api/projects/{pid}{path}", org) for path in paths}
+
+    one, five = counts(project(1)), counts(project(5))
+    assert five == one, f"query count grew with more rows: {one} -> {five}"
+    assert max(five.values()) <= 7, five

@@ -43,7 +43,12 @@ export function needErrors(d: NeedDraft): Record<string, string> {
   if (!(Number(d.quantity) > 0)) e.quantity = 'Must be more than 0.'
   if (d.type !== 'money' && !d.unit.trim()) e.unit = 'Say the unit, for example packs or hours.'
   if (d.type === 'money' && !d.budget_item.trim()) e.budget_item = 'Money needs a budget item.'
-  if (d.slot_start && d.slot_end && d.slot_end <= d.slot_start) e.slot_end = 'Must end after it starts.'
+  if (d.slot_start && d.slot_end && d.slot_end <= d.slot_start)
+    // Same day but an earlier hour (for example 10:25 PM to 04:23 AM): say what to change
+    e.slot_end =
+      d.slot_end.slice(0, 10) === d.slot_start.slice(0, 10)
+        ? 'Ends before it starts. If it runs past midnight, set the end date to the next day.'
+        : 'Must end after it starts.'
   return e
 }
 

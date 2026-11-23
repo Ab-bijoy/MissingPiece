@@ -39,9 +39,10 @@
   --animate-float: float 6s ease-in-out infinite;
 
   @keyframes draw {
-    /* The first ~9% of the ribbon is its transparent fade-in, so start past it */
+    /* The first ~21% of the ribbon is its off-screen lead-in (x -1000 to -150),
+       so start with the tip just left of the screen: no pause before it shows */
     from {
-      stroke-dashoffset: 0.91;
+      stroke-dashoffset: 0.794;
     }
     to {
       stroke-dashoffset: 0;

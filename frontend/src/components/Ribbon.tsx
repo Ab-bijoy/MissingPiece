@@ -1,10 +1,12 @@
 import { useId } from 'react'
 
-// The same looping ribbon as the main hero, with a colour of choice.
+// The looping ribbon of every landing hero (main and the three roles), in a colour of choice.
 // Render it twice: once behind the headline, once with `front` on top,
 // so it weaves through the letters.
+// It starts far off-screen on the left (the straight lead-in), so on any screen
+// width it runs in unbroken from the left edge, with no gap or fade.
 const RIBBON =
-  'M -60 250 C 90 250, 170 110, 290 105 C 420 100, 440 300, 330 322 C 230 342, 225 196, 372 168 C 540 136, 600 338, 770 306 C 915 278, 865 92, 990 88 C 1112 84, 1092 306, 1215 304 C 1318 302, 1360 184, 1500 160 C 1640 136, 1900 150, 2300 150'
+  'M -1000 250 L -60 250 C 90 250, 170 110, 290 105 C 420 100, 440 300, 330 322 C 230 342, 225 196, 372 168 C 540 136, 600 338, 770 306 C 915 278, 865 92, 990 88 C 1112 84, 1092 306, 1215 304 C 1318 302, 1360 184, 1500 160 C 1640 136, 1900 150, 2300 150'
 
 export default function Ribbon({ color, front = false }: { color: string; front?: boolean }) {
   const id = useId().replace(/:/g, '')
@@ -16,10 +18,6 @@ export default function Ribbon({ color, front = false }: { color: string; front?
       aria-hidden
     >
       <defs>
-        <linearGradient id={`g${id}`} x1="0" x2="360" y1="0" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={color} stopOpacity="0" />
-          <stop offset="1" stopColor={color} />
-        </linearGradient>
         {front && (
           <>
             <linearGradient id={`f${id}`}>
@@ -40,7 +38,8 @@ export default function Ribbon({ color, front = false }: { color: string; front?
         d={RIBBON}
         pathLength={1}
         fill="none"
-        stroke={`url(#g${id})`}
+        stroke={color}
+        strokeOpacity={0.8}
         strokeWidth={46}
         strokeLinecap="round"
         strokeDasharray="1"

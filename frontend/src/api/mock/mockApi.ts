@@ -111,7 +111,7 @@ export async function mockFetch(url: string, init: RequestInit): Promise<Respons
   }
   const res =
     handleAdmin(method, path, body, account.user, new URL(url).searchParams) ??
-    handleOrganizer(method, path, body, account.user) ??
+    handleOrganizer(method, path, body, account.user, new URL(url).searchParams) ??
     handleUser(method, path, body, account.user) ??
     handleSponsor(method, path, body, account.user)
   if (res) return res.status === 204 ? new Response(null, { status: 204 }) : json(res.status, res.body)

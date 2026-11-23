@@ -1,7 +1,6 @@
-import { CircleCheck, Clock3, Plus, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { ChevronDown, CircleCheck, Clock3, Plus, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'
+import { Fragment, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ApiError } from '../../api/client'
 import {
   organizerApi,
   useComments,
@@ -15,10 +14,12 @@ import {
 } from '../../api/organizer'
 import type { GapRow, Need, Offer, OfferConflict, Project, SponsorMatch } from '../../api/types'
 import { Card, EmptyNote, Modal, Pill, smallBtn, Spinner } from '../../components/app/ui'
-import { TextField } from '../../components/ui/Field'
 import Notice from '../../components/ui/Notice'
 import { formatDate, NEED_TYPE_LABEL, needAmount, qtyText, slotText } from '../../lib/format'
 import NeedFields, { emptyDraft, needErrors, needFromDraft } from './NeedFields'
+import NeedRequestsPanel from './NeedRequestsPanel'
+import SendRequestDialog from './SendRequestDialog'
+import { SponsorProfileLink } from './SponsorProfileModal'
 import { useTrackProject } from './OrganizerLayout'
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Please try again.')
@@ -153,6 +154,8 @@ function NeedsCard({ projectId }: { projectId: string }) {
   const { data: project } = useProject(projectId)
   const needById = new Map<string, Need>(project?.needs.map((n) => [n.id, n]) ?? [])
   const remove = useProjectAction(projectId, (needId: string) => organizerApi.deleteNeed(needId))
+  // The need whose requests panel is open (one at a time)
+  const [openNeed, setOpenNeed] = useState<string | null>(null)
 
   return (
     <Card title="Needs" aside={<span className="text-[15px] text-ink-soft">Each need keeps its own unit</span>}>
@@ -179,13 +182,29 @@ function NeedsCard({ projectId }: { projectId: string }) {
               <tbody>
                 {gaps.needs.map((r) => {
                   const n = needById.get(r.need_id)
+                  const expanded = openNeed === r.need_id
                   return (
-                    <tr key={r.need_id} className="border-t border-[#F0EDE6]">
+                    <Fragment key={r.need_id}>
+                    <tr className="border-t border-[#F0EDE6]">
                       <td className="px-2 py-3 font-bold">{r.title}</td>
                       <td className="px-2 py-3">{NEED_TYPE_LABEL[r.type]}</td>
                       <td className="px-2 py-3">{n ? needAmount(n) : qtyText(r)}</td>
                       <td className="px-2 py-3">{gapPill(r)}</td>
-                      <td className={`px-2 py-3 ${r.covered_by ? '' : 'text-ink-soft'}`}>{r.covered_by ?? r.note}</td>
+                      <td className="px-2 py-3">
+                        {/* Opens the requests sent for this need, and a sponsor search */}
+                        <button
+                          type="button"
+                          aria-expanded={expanded}
+                          aria-controls={`requests-${r.need_id}`}
+                          onClick={() => setOpenNeed(expanded ? null : r.need_id)}
+                          className={`inline-flex min-h-11 items-center gap-1 text-left underline underline-offset-2 ${
+                            r.covered_by ? 'font-semibold' : 'text-accent font-semibold'
+                          }`}
+                        >
+                          {r.covered_by ?? (r.note === 'No requests yet' ? 'No requests yet · find a sponsor' : r.note)}
+                          <ChevronDown className={`size-4 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden />
+                        </button>
+                      </td>
                       <td className="px-2 py-3 text-right">
                         {r.state === 'open' && r.note === 'No requests yet' && (
                           <button
@@ -198,6 +217,14 @@ function NeedsCard({ projectId }: { projectId: string }) {
                         )}
                       </td>
                     </tr>
+                    {expanded && project && (
+                      <tr id={`requests-${r.need_id}`}>
+                        <td colSpan={6} className="px-2 pb-4">
+                          <NeedRequestsPanel project={project} needId={r.need_id} needTitle={r.title} />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -224,7 +251,12 @@ function OfferCard({ o, onAccept, onDecline, busy }: { o: Offer; onAccept: () =>
   ].filter(Boolean)
   return (
     <div className="rounded-xl border border-[#E2DED5] bg-white p-4">
-      <div className="font-bold">{o.from_name}</div>
+      {/* Sponsor offers link to the sponsor's profile; contributor offers come from general users */}
+      {o.contribution_role ? (
+        <div className="font-bold">{o.from_name}</div>
+      ) : (
+        <SponsorProfileLink sponsorId={o.from_user_id} name={o.from_name} />
+      )}
       <div className="text-sm text-ink-soft">For: {o.need_title}</div>
       {details.length > 0 && <div className="mt-1 text-[15px] text-ink-soft">{details.join(' · ')}</div>}
       <div className="mt-3 flex gap-2">
@@ -325,7 +357,7 @@ function Suggestions({ project }: { project: Project }) {
           {suggested.map((m) => (
             <div key={m.id} className="rounded-xl border border-[#E2DED5] p-4">
               <div className="flex items-start justify-between gap-3">
-                <div className="font-bold">{m.sponsor_name}</div>
+                <SponsorProfileLink sponsorId={m.sponsor_id} name={m.sponsor_name} />
                 <div className="text-lg font-bold text-accent" aria-label={`Match score ${m.score} out of 100`}>
                   {m.score}
                 </div>
@@ -361,90 +393,6 @@ function Suggestions({ project }: { project: Project }) {
       )}
       <SendRequestDialog project={project} match={requesting} onClose={() => setRequesting(null)} />
     </Card>
-  )
-}
-
-function SendRequestDialog({ project, match, onClose }: { project: Project; match: SponsorMatch | null; onClose: () => void }) {
-  const openNeeds = project.needs.filter((n) => n.status === 'open')
-  const [needId, setNeedId] = useState('')
-  const [benefits, setBenefits] = useState('Logo on the main banner')
-  const [conditions, setConditions] = useState('')
-  const [exclusive, setExclusive] = useState('')
-  const [decideBy, setDecideBy] = useState('')
-  const [deliverBy, setDeliverBy] = useState('')
-  const send = useProjectAction(project.id, () =>
-    organizerApi.sendRequest(project.id, {
-      need_id: needId || openNeeds[0]!.id,
-      sponsor_id: match!.sponsor_id,
-      benefits: benefits.split('\n').map((s) => s.trim()).filter(Boolean),
-      conditions: conditions.trim() || null,
-      exclusive_category: exclusive.trim() || null,
-      decide_by: decideBy || null,
-      deliver_by: deliverBy || null,
-    }),
-  )
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    send.mutate(undefined, { onSuccess: onClose })
-  }
-
-  return (
-    <Modal open={!!match} onClose={onClose} title={`Send a request to ${match?.sponsor_name ?? ''}`}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        {send.isError && (
-          <Notice tone="error">
-            {send.error instanceof ApiError && send.error.code === 'request_limit'
-              ? 'You have already asked 5 sponsors for this project. That is the limit.'
-              : errText(send.error)}
-          </Notice>
-        )}
-        <label className="font-bold">
-          Which need?
-          <select
-            value={needId || openNeeds[0]?.id}
-            onChange={(e) => setNeedId(e.target.value)}
-            className="mt-1.5 block min-h-13 w-full rounded-[10px] border border-[#C9C3B6] bg-white px-3.5 font-normal"
-          >
-            {openNeeds.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.title}: {qtyText(n)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="font-bold">
-          What you offer in return
-          <span className="block text-[15px] font-normal text-ink-soft">One benefit per line</span>
-          <textarea
-            value={benefits}
-            onChange={(e) => setBenefits(e.target.value)}
-            rows={3}
-            className="mt-1.5 block w-full rounded-[10px] border border-[#C9C3B6] px-3.5 py-2.5 font-normal"
-          />
-        </label>
-        <TextField label="Conditions" value={conditions} onChange={(e) => setConditions(e.target.value)} hint="Optional" />
-        <TextField
-          label="Exclusive category"
-          value={exclusive}
-          onChange={(e) => setExclusive(e.target.value)}
-          hint="Optional. For example food, if this sponsor would be the only food sponsor."
-        />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <TextField label="Decide by" type="date" value={decideBy} onChange={(e) => setDecideBy(e.target.value)} />
-          <TextField label="Deliver by" type="date" value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} />
-        </div>
-        <p className="text-[15px] text-ink-soft">Sending opens a message thread with this sponsor. They never see the match score.</p>
-        <div className="flex justify-end gap-2">
-          <button type="button" className={smallBtn.secondary} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className={smallBtn.primary} disabled={send.isPending}>
-            {send.isPending ? 'Sending…' : 'Send request'}
-          </button>
-        </div>
-      </form>
-    </Modal>
   )
 }
 

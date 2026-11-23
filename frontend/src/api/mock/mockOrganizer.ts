@@ -156,7 +156,7 @@ function threadView(th: (typeof data.threads)[number], me: Me): Thread {
 
 // ---- router ---------------------------------------------------------------
 
-export function handleOrganizer(method: string, path: string, body: unknown, me: Me): Res | null {
+export function handleOrganizer(method: string, path: string, body: unknown, me: Me, query?: URLSearchParams): Res | null {
   const m = (re: RegExp) => path.match(re)
   const isOrg = me.role === 'organizer'
   /** The project if this organizer owns it, otherwise the error to send back. */
@@ -169,6 +169,44 @@ export function handleOrganizer(method: string, path: string, body: unknown, me:
   const done = (r: Res) => {
     if (method !== 'GET') saveData()
     return r
+  }
+
+  // A sponsor's public profile (GET /sponsors/{id}): never contact details
+  const sp = m(/^\/sponsors\/([^/]+)$/)
+  if (sp && sp[1] !== 'search' && method === 'GET' && isOrg) {
+    const acc = mockDb.accounts.find((a) => a.user?.id === sp[1] && a.user.role === 'sponsor' && a.user.status === 'active')
+    if (!acc?.user) return fail(404, 'Sponsor not found.', 'not_found')
+    const prof = acc.user.profile as { company?: string; industry?: string; location?: string | null; interests?: string[]; preferred_types?: string[]; description?: string | null } | null
+    const got = data.offers.filter((o) => o.from_user_id === acc.user!.id && o.stage === 'received')
+    return ok({
+      id: acc.user.id, name: prof?.company || acc.user.name, industry: prof?.industry ?? null, location: prof?.location ?? null,
+      interests: prof?.interests ?? [], preferred_types: prof?.preferred_types ?? [], description: prof?.description ?? null,
+      member_since: '2026-09-01T00:00:00+06:00', contributions_received: got.length,
+      projects_supported: new Set(got.map((o) => data.needs.find((n) => n.id === o.need_id)?.project_id)).size,
+    })
+  }
+
+  // Sponsor search (GET /sponsors/search?project_id=&q=): public profile fields only
+  if (path === '/sponsors/search' && method === 'GET' && isOrg) {
+    const q = (query?.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean)
+    const pid = query?.get('project_id') ?? ''
+    const list = mockDb.accounts
+      .filter((a) => a.user?.role === 'sponsor' && a.user.status === 'active')
+      .map((a) => {
+        const prof = a.user!.profile as { company?: string; industry?: string; location?: string | null; interests?: string[] } | null
+        return {
+          id: a.user!.id,
+          name: prof?.company || a.user!.name,
+          industry: prof?.industry ?? null,
+          location: prof?.location ?? null,
+          interests: prof?.interests ?? [],
+          requested: data.requests.some((r) => r.project_id === pid && r.sponsor_id === a.user!.id),
+        }
+      })
+      .filter((s) => q.every((w) => [s.name, s.industry ?? '', s.location ?? '', ...s.interests].join(' ').toLowerCase().includes(w)))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 20)
+    return ok(list)
   }
 
   // Templates and projects
@@ -252,6 +290,24 @@ export function handleOrganizer(method: string, path: string, body: unknown, me:
           requests_left: requestsLeft(proj.id),
         }),
       )
+    }
+    if (what === 'requests' && method === 'GET') {
+      const stateOf: Record<string, string> = {
+        offered: 'offer_received', accepted: 'accepted', received: 'received', declined: 'declined', withdrawn: 'withdrawn', expired: 'expired',
+      }
+      const list = data.requests
+        .filter((r) => r.project_id === proj.id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((r) => {
+          const offer = data.offers.filter((o) => o.request_id === r.id).sort((a, b) => b.created_at.localeCompare(a.created_at))[0]
+          return {
+            id: r.id, need_id: r.need_id, need_title: data.needs.find((n) => n.id === r.need_id)?.title ?? '',
+            sponsor_id: r.sponsor_id, sponsor_name: nameOf(r.sponsor_id), created_at: r.created_at, decide_by: r.decide_by ?? null,
+            state: offer ? stateOf[offer.stage] ?? 'waiting' : 'waiting', offer_id: offer?.id ?? null,
+            thread_id: data.threads.find((t) => t.request_id === r.id)?.id ?? null,
+          }
+        })
+      return ok(list)
     }
     if (what === 'requests' && method === 'POST') {
       const b = body as RequestInput

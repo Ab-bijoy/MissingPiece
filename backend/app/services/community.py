@@ -20,7 +20,7 @@ from app.models.enums import (
 )
 from app.services import loaders
 from app.services.notifications import notify
-from app.services.views import holding_offer, qty_text
+from app.services.views import holding_offer, need_phrase, qty_text
 
 
 def local_today():
@@ -97,7 +97,7 @@ def feed_items(db, projects, user, stats=None):
                 **community[p.id],
                 "description": p.description,
                 "posted_at": p.created_at,
-                "still_needed": [f"{qty_text(n)} for {n.title.lower()}" for n in opened],
+                "still_needed": [need_phrase(n) for n in opened],
                 "help_needed": [
                     {"need_id": n.id, "title": n.title, "text": qty_text(n)}
                     for n in opened
