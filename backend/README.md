@@ -14,6 +14,17 @@ The community routes use the existing `app_user`, `project`, `need`, `offer`,
   contributors create a pending membership and offer. A contribution includes
   `need_id`, `contribution_role`, and optionally timezone-aware `slot_start`/`slot_end`.
   Omitted slots inherit the selected need's slot. Trainers require a skill need.
+- `POST /api/events/{id}/leave` cancels the caller's participant attendance and frees
+  their seat. It is idempotent when they have no membership; contributors must withdraw
+  their offer instead. Cancellation removes the attendance row from My contributions.
+- A contributor join request with `switch_from_participant: true` explicitly switches
+  an existing participant to a pending helper. All validation happens first; a failed
+  application keeps their seat. Success releases the seat and creates the offer in one
+  transaction. Approval remains the organizer module's responsibility. No schema change
+  is needed: the existing membership row changes role and status.
+- Joining, switching and cancellation require a live program dated today or later in
+  `Asia/Dhaka`. The public feed excludes earlier dates. Ended details and contribution
+  history remain available; elapsed dates do not automatically mark projects complete.
 - Event details include `my_membership`, `my_offer_id`, `seats_left`, and `comment_count`.
 - Authenticated active accounts can post comments, questions, and replies. Replies
   must reference an accessible comment on the same event. Hidden comments are visible

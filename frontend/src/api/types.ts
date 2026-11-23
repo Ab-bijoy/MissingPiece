@@ -397,7 +397,7 @@ export type ProgramDetail = EventDetail & {
 /** POST /events/{id}/join */
 export type JoinInput =
   | { role: 'participant' }
-  | { role: 'contributor'; contribution_role: ContributionRole; need_id: string; slot_start?: string; slot_end?: string }
+  | { role: 'contributor'; contribution_role: ContributionRole; need_id: string; slot_start?: string; slot_end?: string; switch_from_participant?: boolean }
 
 /** GET /me/memberships: "My contributions" */
 export type MyContribution = {

@@ -39,9 +39,12 @@ class JoinIn(BaseModel):
     need_id: uuid.UUID | None = None
     slot_start: AwareDatetime | None = None
     slot_end: AwareDatetime | None = None
+    switch_from_participant: bool = False
 
     @model_validator(mode="after")
     def valid_role(self):
+        if self.switch_from_participant and self.role != "contributor":
+            raise ValueError("Only a helper application can switch from participant")
         if self.role == "contributor" and (not self.need_id or not self.contribution_role):
             raise ValueError("Choose a need and contribution role")
         if self.role == "participant" and any((self.need_id, self.contribution_role, self.slot_start, self.slot_end)):

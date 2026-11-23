@@ -3,6 +3,7 @@ import { data, newId, nowIso, saveData, type DProject } from './mockData'
 import { mockDb } from './mockDb'
 import { nameOf, notify, qtyText } from './mockOrganizer'
 import { eventFacts } from './mockSponsor'
+import { acceptsApplications } from '../../lib/programDates'
 
 /**
  * Demo-mode answers for general users (build prompt 7.5: feed, program page,
@@ -22,7 +23,8 @@ function seatsLeft(p: DProject) {
 
 function myMembership(p: DProject, me: Me) {
   const m = data.memberships.find((x) => x.project_id === p.id && x.user_id === me.id)
-  return m ? { id: m.id, role: m.role, status: m.status } : null
+  const offer = m?.offer_id ? data.offers.find((o) => o.id === m.offer_id) : null
+  return m && !['withdrawn', 'declined', 'expired'].includes(offer?.stage ?? '') ? { id: m.id, role: m.role, status: m.status } : null
 }
 
 const visibleTop = (pid: string) => data.comments.filter((c) => c.project_id === pid && c.status === 'visible' && !c.parent_id)
@@ -59,7 +61,7 @@ export function handleUser(method: string, path: string, body: unknown, me: Me):
 
   if (path === '/feed' && method === 'GET') {
     const items: FeedItem[] = data.projects
-      .filter((p) => p.status === 'live' && p.event_date >= nowIso().slice(0, 10))
+      .filter((p) => acceptsApplications(p))
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .map((p) => {
         const top = visibleTop(p.id).sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -104,21 +106,44 @@ export function handleUser(method: string, path: string, body: unknown, me: Me):
   }
 
   // Join (rule 14): participants are in at once; contributors wait for approval.
+  g = m(/^\/events\/([^/]+)\/leave$/)
+  if (g && method === 'POST') {
+    const p = data.projects.find((x) => x.id === g![1])
+    if (!p || !acceptsApplications(p)) return fail(409, 'This program is not accepting applications.', 'closed')
+    const index = data.memberships.findIndex((x) => x.project_id === p.id && x.user_id === me.id)
+    if (index >= 0) {
+      if (data.memberships[index].role !== 'participant') return fail(409, 'Withdraw your helper offer instead.', 'not_participant')
+      data.memberships.splice(index, 1)
+    }
+    return done(ok(undefined, 204))
+  }
+
   g = m(/^\/events\/([^/]+)\/join$/)
   if (g && method === 'POST') {
     const p = data.projects.find((x) => x.id === g![1] && x.status === 'live')
-    if (!p) return fail(404, 'Program not found.', 'not_found')
-    if (data.memberships.some((x) => x.project_id === p.id && x.user_id === me.id))
-      return fail(409, 'You have already joined this program.', 'already_joined')
+    if (!p || !acceptsApplications(p)) return fail(409, 'This program is not accepting applications.', 'closed')
     const b = body as JoinInput
+    const existing = data.memberships.find((x) => x.project_id === p.id && x.user_id === me.id)
+    const switching = b.role === 'contributor' && b.switch_from_participant
+    if (switching && existing?.role !== 'participant') return fail(409, 'You are no longer attending as a participant.', 'not_participant')
+    if (!switching && myMembership(p, me)) return fail(409, 'You have already joined this program.', 'already_joined')
+    const replace = () => {
+      if (existing) data.memberships.splice(data.memberships.indexOf(existing), 1)
+    }
     if (b.role === 'participant') {
       if (seatsLeft(p) <= 0) return fail(409, 'Sorry, this program is full.', 'full')
+      replace()
       data.memberships.push({ id: newId('mb'), user_id: me.id, project_id: p.id, role: 'participant', status: 'approved', offer_id: null })
       return done(ok(undefined, 204))
     }
     const n = data.needs.find((x) => x.id === b.need_id && x.project_id === p.id)
     if (!n) return fail(422, 'Please choose what you can help with.', 'validation')
     if (holding(n.id)) return fail(409, 'Someone is already covering this. Thank you for offering!', 'need_covered')
+    if (!HELPABLE.includes(n.type) || (b.contribution_role === 'trainer' && n.type !== 'skill')) return fail(422, 'Choose an eligible contribution need.', 'invalid_need')
+    const start = b.slot_start ?? n.slot_start
+    const end = b.slot_end ?? n.slot_end
+    if (!start || !end || Date.parse(end) <= Date.parse(start) || Date.parse(end) <= Date.now()) return fail(422, 'Availability must be in the future.', 'invalid_slot')
+    replace()
     const offerId = newId('o')
     data.offers.push({
       id: offerId, need_id: n.id, from_user_id: me.id, request_id: null, stage: 'offered', contribution_role: b.contribution_role,

@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthProvider'
 import Notice from '../../components/ui/Notice'
 import { SkeletonList } from '../../components/ui/Skeleton'
 import { formatDate, timeAgo } from '../../lib/format'
+import { acceptsApplications, useDhakaToday } from '../../lib/programDates'
 import { Avatar, card, Cover, DateBadge, membershipStatus, myStatusPill, ubtn } from './bits'
 import { useLargeText } from './UserLayout'
 
@@ -258,10 +259,11 @@ export function CommentBubble({ name, body, organizer, indent }: { name: string;
 }
 
 function RightColumn({ feed }: { feed: FeedItem[] }) {
+  const today = useDhakaToday()
   const { data: mine } = useMyContributions()
   const ahead = usePrefetchProgram()
   const { large, setLarge } = useLargeText()
-  const upcoming = (mine ?? []).filter((m) => m.project.status === 'live' && m.status !== 'rejected' && m.offer?.stage !== 'withdrawn').slice(0, 3)
+  const upcoming = (mine ?? []).filter((m) => acceptsApplications(m.project, today) && m.status !== 'rejected' && m.offer?.stage !== 'withdrawn').slice(0, 3)
   const help = feed.flatMap((f) => f.help_needed.map((h) => ({ ...h, project: f.name, id: f.id }))).slice(0, 4)
 
   return (

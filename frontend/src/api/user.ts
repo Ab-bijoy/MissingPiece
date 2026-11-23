@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type InvalidateQueryFilters, type QueryClient } from '@tanstack/react-query'
 import { api } from './client'
+import { acceptsApplications, useDhakaToday } from '../lib/programDates'
 import type { Comment, CommentKind, FeedItem, JoinInput, MyContribution, MyMembership, MyProfile, OrganizerProfileView, ProgramDetail } from './types'
 
 // General user calls from build prompt 7.5, plus comments (7.6).
@@ -9,6 +10,7 @@ export const userApi = {
   feed: () => api<FeedItem[]>('/feed'),
   program: (id: string) => api<ProgramDetail>(`/events/${id}`),
   join: (id: string, body: JoinInput) => api<void>(`/events/${id}/join`, { method: 'POST', json: body }),
+  leave: (id: string) => api<void>(`/events/${id}/leave`, { method: 'POST' }),
   myMemberships: () => api<MyContribution[]>('/me/memberships'),
   withdraw: (offerId: string) => api<void>(`/offers/${offerId}/withdraw`, { method: 'POST' }),
   profile: () => api<MyProfile>('/me/profile'),
@@ -42,7 +44,15 @@ export function usePrefetchProgram() {
   }
 }
 
-export const useFeed = () => useQuery({ queryKey: uqk.feed, queryFn: userApi.feed })
+export const useFeed = () => {
+  const today = useDhakaToday()
+  return useQuery({
+    queryKey: uqk.feed,
+    queryFn: userApi.feed,
+    // Cached pages also stop advertising programs when Dhaka rolls into a new day.
+    select: (items) => items.filter((p) => acceptsApplications(p, today)),
+  })
+}
 export const useProgram = (id: string) => useQuery({ queryKey: uqk.program(id), queryFn: () => userApi.program(id) })
 export const useProgramComments = (id: string) =>
   useQuery({ queryKey: uqk.comments(id), queryFn: () => userApi.comments(id) })

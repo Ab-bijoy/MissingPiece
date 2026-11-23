@@ -114,23 +114,44 @@ def feed_item(db, p, user):
     return feed_items(db, [p], user)[0]
 
 
-def join(db, user, project_id, body):
+def joinable_project(db, project_id):
     # Serialize capacity allocation and repeated joins for this project.
     p = db.scalar(select(Project).where(Project.id == project_id).with_for_update())
     if p is None or p.status != ProjectStatus.live or p.event_date < local_today():
         raise ApiError(409, "This program is not accepting applications.", "closed")
+    return p
+
+
+def leave(db, user, project_id):
+    """Cancel only the caller's attendance; share the join lock to serialize seat changes."""
+    p = joinable_project(db, project_id)
+    m = db.scalar(select(EventMembership).where(EventMembership.user_id == user.id, EventMembership.project_id == p.id))
+    if m is None:
+        return  # Idempotent retry: their seat is already free.
+    if m.role != MembershipRole.participant:
+        raise ApiError(409, "Withdraw your helper offer instead.", "not_participant")
+    db.delete(m)
+    db.commit()
+
+
+def join(db, user, project_id, body):
+    p = joinable_project(db, project_id)
     existing = db.scalar(
         select(EventMembership).where(
             EventMembership.user_id == user.id,
             EventMembership.project_id == p.id,
         )
     )
-    if existing:
+    switching = body.switch_from_participant
+    if switching:
+        if not existing or existing.role != MembershipRole.participant:
+            raise ApiError(
+                409, "You are no longer attending as a participant. Refresh this program.", "not_participant"
+            )
+    elif existing:
         old = db.get(Offer, existing.offer_id) if existing.offer_id else None
         if not old or old.stage not in (OfferStage.withdrawn, OfferStage.declined, OfferStage.expired):
             raise ApiError(409, "You already joined this program.", "already_joined")
-        db.delete(existing)
-        db.flush()
     offer = None
     if body.role == "participant":
         if loaders.member_counts(db, [p.id]).get(p.id, {}).get(MembershipRole.participant, 0) >= p.audience:
@@ -161,13 +182,12 @@ def join(db, user, project_id, body):
         )
         db.add(offer)
         db.flush()
-    m = EventMembership(
-        user_id=user.id,
-        project_id=p.id,
-        role=body.role,
-        status=MembershipStatus.pending if offer else MembershipStatus.approved,
-        offer_id=offer.id if offer else None,
-    )
+    # Change the membership only after every validation succeeds. One transaction
+    # releases the participant seat and creates the pending helper application.
+    m = existing or EventMembership(user_id=user.id, project_id=p.id)
+    m.role = body.role
+    m.status = MembershipStatus.pending if offer else MembershipStatus.approved
+    m.offer_id = offer.id if offer else None
     db.add(m)
     db.flush()
     if offer:

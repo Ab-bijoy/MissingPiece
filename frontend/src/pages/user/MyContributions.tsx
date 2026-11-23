@@ -5,18 +5,19 @@ import type { MyContribution } from '../../api/types'
 import Notice from '../../components/ui/Notice'
 import { SkeletonList } from '../../components/ui/Skeleton'
 import { slotText } from '../../lib/format'
+import { acceptsApplications, programEnded, useDhakaToday } from '../../lib/programDates'
+import LeaveProgramButton from './LeaveProgramButton'
 import { card, DateBadge, membershipStatus, ubtn } from './bits'
-
-const today = () => new Date().toISOString().slice(0, 10)
 
 /** My contributions (prototype "General user B · My contributions"), in plain words. */
 export default function MyContributions() {
   const { data, isPending, error } = useMyContributions()
   const ahead = usePrefetchProgram()
+  const today = useDhakaToday()
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
   const withdraw = useUserAction((offerId: string) => userApi.withdraw(offerId), refreshAfter.withdraw)
 
-  const isPast = (m: MyContribution) => m.project.status === 'complete' || m.project.event_date < today()
+  const isPast = (m: MyContribution) => programEnded(m.project, today)
   const list = (data ?? []).filter((m) => (tab === 'past' ? isPast(m) : !isPast(m)))
 
   return (
@@ -73,6 +74,12 @@ export default function MyContributions() {
                   <Link {...ahead(m.project.id)} to={`/programs/${m.project.id}`} className={ubtn.soft}>
                     Open program
                   </Link>
+                  {m.role === 'participant' && acceptsApplications(m.project, today) && (
+                    <>
+                      <LeaveProgramButton programId={m.project.id} />
+                      <Link to={`/programs/${m.project.id}#contribute`} className={ubtn.soft}>Switch to helping</Link>
+                    </>
+                  )}
                   {canWithdraw && (
                     <button
                       type="button"
