@@ -184,8 +184,8 @@ function Discussion({ p }: { p: ProgramDetail }) {
     () => refreshAfter.comment(p.id),
     (qc, c) => addComment(qc, p.id, c),
   )
-  const top = (comments ?? []).filter((c) => !c.parent_id)
-  const repliesOf = (id: string) => (comments ?? []).filter((c) => c.parent_id === id)
+  const top = (comments ?? []).filter((c) => c.status === 'visible' && !c.parent_id)
+  const repliesOf = (id: string) => (comments ?? []).filter((c) => c.status === 'visible' && c.parent_id === id)
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -222,10 +222,12 @@ function Discussion({ p }: { p: ProgramDetail }) {
             />
           </label>
           <button type="submit" className={ubtn.primary} disabled={!text.trim() || post.isPending}>
-            Post
+            {post.isPending ? 'Checking…' : 'Post'}
           </button>
         </div>
         {post.isError && <Notice tone="error">{post.error instanceof Error ? post.error.message : 'Could not post.'}</Notice>}
+        {post.isSuccess && post.data.status === 'hidden' && <Notice>Your comment was not published. Only admins can view it for review.</Notice>}
+        <p className="text-sm text-ink-soft">Comments are checked before appearing publicly. Do not share phone numbers, email addresses or home addresses.</p>
       </form>
       {commentsLoading && <p className="mt-4">Loading comments…</p>}
       {commentsError && <Notice tone="error">{commentsError.message}</Notice>}
@@ -236,8 +238,7 @@ function Discussion({ p }: { p: ProgramDetail }) {
             <div>
               <CommentBubble name={c.author_name} body={c.body} />
               <p className="mt-1 pl-13 text-sm text-ink-soft">
-                {timeAgo(c.created_at)}
-                {c.status === 'hidden' && ' · hidden by the organizer (visible to you, the organizer and admins)'} ·{' '}
+                {timeAgo(c.created_at)} ·{' '}
                 <button
                   type="button"
                   className="min-h-11 font-semibold text-user-accent"
@@ -251,7 +252,9 @@ function Discussion({ p }: { p: ProgramDetail }) {
               </p>
             </div>
             {repliesOf(c.id).map((r) => (
-              <CommentBubble key={r.id} name={r.author_name} body={r.body} organizer={r.is_organizer === true} indent />
+              <div key={r.id}>
+                <CommentBubble name={r.author_name} body={r.body} organizer={r.is_organizer === true} indent />
+              </div>
             ))}
           </li>
         ))}

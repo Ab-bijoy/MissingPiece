@@ -142,6 +142,7 @@ export type SponsorMatch = {
   sponsor_name: string
   score: number
   reason: string
+  source?: 'ai' | 'rules'
   status: MatchStatus
 }
 export type SponsorMatchList = { matches: SponsorMatch[]; requests_left: number }

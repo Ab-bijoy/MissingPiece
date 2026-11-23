@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
+import type { CommentPostResult } from './user'
 import type {
   AppNotification,
   Benefit,
@@ -69,11 +70,11 @@ export const organizerApi = {
   // Shared (7.6)
   comments: (projectId: string) => api<Comment[]>(`/events/${projectId}/comments`),
   postComment: (projectId: string, body: { kind: CommentKind; body: string; parent_id: string | null }) =>
-    api<Comment>(`/events/${projectId}/comments`, { method: 'POST', json: body }),
+    api<CommentPostResult>(`/events/${projectId}/comments`, { method: 'POST', json: body }),
   threads: () => api<Thread[]>('/threads'),
   messages: (threadId: string) => api<Message[]>(`/threads/${threadId}/messages`),
   sendMessage: (threadId: string, body: string) =>
-    api<Message>(`/threads/${threadId}/messages`, { method: 'POST', json: { body } }),
+    api<Message | { id: string; status: 'hidden' }>(`/threads/${threadId}/messages`, { method: 'POST', json: { body } }),
   notifications: () => api<AppNotification[]>('/notifications'),
   readNotification: (id: string) => api<void>(`/notifications/${id}/read`, { method: 'POST' }),
   readAllNotifications: () => api<void>('/notifications/read-all', { method: 'POST' }),

@@ -327,7 +327,7 @@ function OffersCard({ projectId }: { projectId: string }) {
 }
 
 function Suggestions({ project }: { project: Project }) {
-  const { data } = useMatches(project.id)
+  const { data, error } = useMatches(project.id)
   const [requesting, setRequesting] = useState<SponsorMatch | null>(null)
   const dismiss = useProjectAction(project.id, (id: string) => organizerApi.dismissMatch(id))
   const refresh = useProjectAction(project.id, () => organizerApi.generateMatches(project.id))
@@ -349,9 +349,11 @@ function Suggestions({ project }: { project: Project }) {
         )
       }
     >
-      {!data ? (
+      {error && <Notice tone="error">{error.message}</Notice>}
+      {refresh.isError && <Notice tone="error">{refresh.error instanceof Error ? refresh.error.message : 'Could not generate suggestions.'}</Notice>}
+      {!data && !error ? (
         <Spinner />
-      ) : (
+      ) : data ? (
         <div className="flex flex-col gap-3">
           {suggested.length === 0 && <EmptyNote>No new suggestions right now.</EmptyNote>}
           {suggested.map((m) => (
@@ -363,6 +365,7 @@ function Suggestions({ project }: { project: Project }) {
                 </div>
               </div>
               <p className="mt-1 text-[15px] text-ink-soft">{m.reason}</p>
+              <p className="mt-1 text-xs text-ink-soft">{m.source === 'ai' ? 'AI suggestion — review the sponsor profile before sending a request.' : 'Earlier rule-based suggestion. Refresh for an AI assessment.'}</p>
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
@@ -383,14 +386,14 @@ function Suggestions({ project }: { project: Project }) {
             <button
               type="button"
               onClick={() => refresh.mutate(undefined)}
-              disabled={refresh.isPending}
+              disabled={refresh.isPending || openNeeds.length === 0}
               className="inline-flex min-h-11 items-center gap-1.5 font-bold text-accent"
             >
-              <RefreshCw className={`size-4 ${refresh.isPending ? 'animate-spin' : ''}`} aria-hidden /> Refresh
+              <RefreshCw className={`size-4 ${refresh.isPending ? 'animate-spin' : ''}`} aria-hidden /> {refresh.isPending ? 'Finding sponsors…' : 'Find sponsors with AI'}
             </button>
           </div>
         </div>
-      )}
+      ) : null}
       <SendRequestDialog project={project} match={requesting} onClose={() => setRequesting(null)} />
     </Card>
   )
@@ -471,8 +474,12 @@ function Questions({ projectId }: { projectId: string }) {
   const { data: comments } = useComments(projectId)
   const [replyTo, setReplyTo] = useState<string | null>(null)
   const [text, setText] = useState('')
+  const [held, setHeld] = useState(false)
   const reply = useProjectAction(projectId, (parent: string) =>
-    organizerApi.postComment(projectId, { kind: 'reply', body: text, parent_id: parent }),
+    organizerApi.postComment(projectId, { kind: 'reply', body: text, parent_id: parent }).then((result) => {
+      setHeld(result.status === 'hidden')
+      return result
+    }),
   )
   const hide = useProjectAction(projectId, (id: string) => organizerApi.hideComment(id))
 
@@ -482,6 +489,8 @@ function Questions({ projectId }: { projectId: string }) {
 
   return (
     <Card title="New questions">
+      {held && <Notice>Your reply was not published. Only admins can view it for review.</Notice>}
+      {reply.isError && <Notice tone="error">{reply.error instanceof Error ? reply.error.message : 'Could not post reply.'}</Notice>}
       {open.length === 0 ? (
         <EmptyNote>No unanswered questions.</EmptyNote>
       ) : (
@@ -538,7 +547,7 @@ function Questions({ projectId }: { projectId: string }) {
           ))}
         </ul>
       )}
-      <p className="mt-3 text-sm text-ink-soft">Hidden comments stay visible to their author, you and admins.</p>
+      <p className="mt-3 text-sm text-ink-soft">Replies are checked before publication. Only admins can view hidden comments.</p>
     </Card>
   )
 }

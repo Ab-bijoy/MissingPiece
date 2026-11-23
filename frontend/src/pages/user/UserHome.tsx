@@ -125,12 +125,15 @@ function AskBox({ feed }: { feed: FeedItem[] }) {
             </select>
           </label>
           <button type="submit" className={ubtn.primary} disabled={ask.isPending}>
-            <Send className="size-4" aria-hidden /> Ask
+            <Send className="size-4" aria-hidden /> {ask.isPending ? 'Checking…' : 'Ask'}
           </button>
         </div>
       )}
-      {sent && <Notice tone="success">Your question is posted. The organizer will reply on the program page.</Notice>}
+      {sent && (ask.data?.status === 'hidden'
+        ? <Notice>Your question was not published. Only admins can view it for review.</Notice>
+        : <Notice tone="success">Your question is posted. The organizer will reply on the program page.</Notice>)}
       {ask.isError && <Notice tone="error">{ask.error instanceof Error ? ask.error.message : 'Could not post.'}</Notice>}
+      <p className="text-sm text-ink-soft">Do not share phone numbers, email addresses or home addresses.</p>
     </form>
   )
 }
@@ -238,6 +241,10 @@ function Post({ item }: { item: FeedItem }) {
             <Send className="size-5" aria-hidden />
           </button>
         </form>
+        {comment.isSuccess && comment.data.status === 'hidden' && <Notice>Your comment was not published. Only admins can view it for review.</Notice>}
+        {comment.isError && <Notice tone="error">{comment.error instanceof Error ? comment.error.message : 'Could not post.'}</Notice>}
+        {comment.isPending && <p role="status" className="mt-2 text-sm text-ink-soft">Checking your comment…</p>}
+        <p className="mt-2 text-sm text-ink-soft">Do not share phone numbers, email addresses or home addresses.</p>
       </div>
     </article>
   )

@@ -439,18 +439,18 @@ export function handleOrganizer(method: string, path: string, body: unknown, me:
     const p = data.projects.find((x) => x.id === g![1])
     if (!p) return fail(404, 'Event not found.', 'not_found')
     if (method === 'GET') {
-      const canSeeHidden = (c: { user_id: string }) => c.user_id === me.id || p.organizer_id === me.id || me.role === 'admin'
       const list: Comment[] = data.comments
-        .filter((c) => c.project_id === p.id && (c.status === 'visible' || canSeeHidden(c)))
+        .filter((c) => c.project_id === p.id && (c.status === 'visible' || me.role === 'admin'))
         .map((c) => ({ ...c, author_name: nameOf(c.user_id) }))
       return ok(list)
     }
     if (method === 'POST') {
       const b = body as { kind: Comment['kind']; body: string; parent_id: string | null }
       if (!b.body?.trim()) return fail(422, 'Please write something first.', 'validation')
+      const parent = data.comments.find((x) => x.id === b.parent_id && x.project_id === p.id && (x.status === 'visible' || me.role === 'admin'))
+      if (b.parent_id && !parent) return fail(404, 'Parent comment not found.', 'not_found')
       const c = { id: newId('c'), project_id: p.id, user_id: me.id, parent_id: b.parent_id, kind: b.kind, body: b.body.trim(), status: 'visible' as const, created_at: nowIso() }
       data.comments.push(c)
-      const parent = data.comments.find((x) => x.id === b.parent_id)
       if (parent && parent.user_id !== me.id) notify(parent.user_id, 'comment_replied', c.id, `${me.name} replied to you on ${p.name}.`)
       if (!parent && p.organizer_id !== me.id)
         notify(p.organizer_id, 'comment_posted', c.id, `${me.name} ${b.kind === 'question' ? 'asked a question' : 'commented'} on ${p.name}.`)
