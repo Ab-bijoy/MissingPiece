@@ -197,7 +197,7 @@ function Post({ item }: { item: FeedItem }) {
         {preview && (
           <div className="flex flex-col gap-3">
             <CommentBubble name={preview.author_name} body={preview.body} />
-            {preview.reply && <CommentBubble name={preview.reply.author_name} body={preview.reply.body} organizer indent />}
+            {preview.reply && <CommentBubble name={preview.reply.author_name} body={preview.reply.body} organizer={preview.reply.is_organizer === true} indent />}
           </div>
         )}
         {item.comment_count > 1 && (

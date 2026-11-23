@@ -11,6 +11,7 @@ from app.models import Need, Project
 from app.models.enums import NeedType, ProjectStatus
 from app.schemas.common import NeedOut
 from app.schemas.sponsor import EventDetail, EventNeed, EventSummary
+from app.services.community import community_fields
 from app.services.views import event_facts, holding_offer, qty_text
 
 router = APIRouter(prefix="/api", tags=["events"])
@@ -52,4 +53,5 @@ def event(project_id: uuid.UUID, user: ActiveUser, db: DB):
         hold = holding_offer(db, n.id)
         state = "open" if hold is None else ("received" if hold.stage.value == "received" else "covered")
         detail_needs.append(EventNeed(**NeedOut.model_validate(n).model_dump(), state=state))
-    return EventDetail(**event_facts(db, p).model_dump(), description=p.description, needs=detail_needs)
+    return EventDetail(**event_facts(db, p).model_dump(), description=p.description, needs=detail_needs,
+                       **community_fields(db, p, user))

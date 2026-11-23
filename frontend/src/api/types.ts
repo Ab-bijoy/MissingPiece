@@ -189,6 +189,7 @@ export type OfferList = { offers: Offer[]; conflicts: OfferConflict[] }
 export type CommentKind = 'comment' | 'question' | 'reply'
 /** GET /events/{id}/comments */
 export type Comment = {
+  is_organizer?: boolean
   id: string
   project_id: string
   user_id: string
@@ -392,7 +393,7 @@ export type ProgramDetail = EventDetail & {
 /** POST /events/{id}/join */
 export type JoinInput =
   | { role: 'participant' }
-  | { role: 'contributor'; contribution_role: ContributionRole; need_id: string }
+  | { role: 'contributor'; contribution_role: ContributionRole; need_id: string; slot_start?: string; slot_end?: string }
 
 /** GET /me/memberships: "My contributions" */
 export type MyContribution = {

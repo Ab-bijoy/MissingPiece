@@ -1,5 +1,40 @@
 # MissingPiece API (backend)
 
+## Community API
+
+The community routes use the existing `app_user`, `project`, `need`, `offer`,
+`event_membership`, `comment`, `booking`, and `notification` tables. Migration
+`c031_community` adds query indexes; it does not reset or replace existing data.
+
+- `GET /api/feed` and `GET /api/events/{id}/comments` allow anonymous reads.
+  A bearer token adds personal membership or authorized hidden-comment visibility.
+  Both support bounded `limit` and `offset` parameters.
+- General accounts use `POST /api/events/{id}/join`, `GET /api/me/memberships`,
+  and `GET/PATCH /api/me/profile`. Participants join immediately, subject to capacity;
+  contributors create a pending membership and offer. A contribution includes
+  `need_id`, `contribution_role`, and optionally timezone-aware `slot_start`/`slot_end`.
+  Omitted slots inherit the selected need's slot. Trainers require a skill need.
+- Event details include `my_membership`, `my_offer_id`, `seats_left`, and `comment_count`.
+- Authenticated active accounts can post comments, questions, and replies. Replies
+  must reference an accessible comment on the same event. Hidden comments are visible
+  only to their author, the event organizer, and admins.
+- Withdrawal and expiry remove bookings and deactivate linked contributor memberships.
+  Withdrawn, rejected, or expired contributor offers may be replaced by a new application.
+  The existing one-accepted-offer-per-need database rule remains in force.
+- `POST /api/internal/jobs/expire-offers` requires the literal `JOBS_SECRET` HTTP
+  header matching the backend environment value. Empty/example secrets are refused.
+  Offered/accepted offers expire after the event date or need deadline; request
+  decision deadlines apply to offered offers and delivery deadlines to accepted offers.
+  Dates use Asia/Dhaka; the deadline date itself remains valid. Received offers are
+  preserved. Repeated calls do not duplicate expiry notifications.
+- `GET /api/health` is the existing lightweight liveness check.
+
+For real frontend requests, set `VITE_API_URL`, `VITE_SUPABASE_URL`, and
+`VITE_SUPABASE_ANON_KEY` in `frontend/.env`, with `VITE_USE_MOCKS=false` and
+`VITE_SKIP_AUTH=false`. Use a publishable/anon key, never the backend service-role key.
+Restart Vite after changing these values. Supabase Auth and the backend must use
+the same Supabase project.
+
 FastAPI + PostgreSQL + SQLAlchemy 2 + Alembic, managed with Poetry. Run every command from this `backend/` folder.
 
 ## Set up

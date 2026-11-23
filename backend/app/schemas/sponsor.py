@@ -154,5 +154,9 @@ class EventNeed(NeedOut):
 
 
 class EventDetail(EventFacts):
+    my_membership: dict | None = None
+    my_offer_id: uuid.UUID | None = None
+    comment_count: int = 0
+    seats_left: int = 0
     description: str
     needs: list[EventNeed]
