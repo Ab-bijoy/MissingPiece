@@ -9,10 +9,10 @@ from sqlalchemy import select
 from app.auth import DB, ActiveUser, decode_token, require_active, require_role
 from app.errors import ApiError, not_found
 from app.models import AppUser, Comment, Project
-from app.models.enums import NotificationType, ProjectStatus, UserRole
+from app.models.enums import CommentStatus, NotificationType, ProjectStatus, UserRole
 from app.schemas.community import CommentIn, JoinIn, ProfileOut, ProfilePatch
 from app.services import community as svc
-from app.services import loaders
+from app.services import loaders, moderation
 from app.services.notifications import notify
 from app.user_cache import load_user
 
@@ -97,11 +97,12 @@ def post_comment(project_id: uuid.UUID, body: CommentIn, user: ActiveUser, db: D
         parent = db.scalar(svc.comment_query(p, user).where(Comment.id == body.parent_id))
         if parent is None:
             raise not_found("Parent comment")
-    c = Comment(project_id=p.id, user_id=user.id, **body.model_dump())
+    status = moderation.status_for_comment(body.body)
+    c = Comment(project_id=p.id, user_id=user.id, status=status, **body.model_dump())
     db.add(c)
     db.flush()
-    recipients = {p.organizer_id}
-    if parent:
+    recipients = {p.organizer_id} if status == CommentStatus.visible else set()
+    if parent and status == CommentStatus.visible:
         recipients.add(parent.user_id)
     for recipient in recipients - {user.id}:
         notify(
@@ -112,4 +113,7 @@ def post_comment(project_id: uuid.UUID, body: CommentIn, user: ActiveUser, db: D
             f"{user.name} {'replied' if parent else 'posted a comment'} on {p.name}.",
         )
     db.commit()
+    if status == CommentStatus.hidden:
+        # Acknowledge submission without returning restricted text to the author.
+        return {"id": c.id, "status": status}
     return svc.comment_out(db, c)

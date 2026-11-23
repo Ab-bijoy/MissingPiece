@@ -39,6 +39,7 @@ class SponsorMatch(IdMixin, TimestampMixin, Base):
     sponsor_id: Mapped[uuid.UUID] = fk("app_user.id")
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     reason: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, server_default="rules", default="rules")
     status: Mapped[MatchStatus] = mapped_column(
         pg_enum(MatchStatus, "match_status"), nullable=False, server_default="suggested", default=MatchStatus.suggested
     )

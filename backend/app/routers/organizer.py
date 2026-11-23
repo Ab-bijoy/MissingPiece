@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -63,7 +63,7 @@ from app.schemas.organizer import (
     SponsorRequestOut,
     TemplateOut,
 )
-from app.services import loaders
+from app.services import loaders, matching
 from app.services import organizer_views as views
 
 # All paths start with /api, like every other router (the frontend calls /api/...)
@@ -282,7 +282,7 @@ def publish_project(project_id: uuid.UUID, user: Organizer, db: DB):
     if project.status != ProjectStatus.draft:
         raise ApiError(400, "Only draft projects can be published.", "invalid_state")
     project.status = ProjectStatus.live
-    _compute_and_store_matches(db, project)
+    # AI generation is explicit: publishing must not depend on provider uptime.
     db.commit()
     project = _get_owned_project(db, project.id, user.id)
     return _to_project_detail(db, project)
@@ -451,13 +451,28 @@ def _compute_and_store_matches(db: Session, project: Project) -> list[SponsorMat
         m.sponsor_id: m for m in db.scalars(select(SponsorMatch).where(SponsorMatch.project_id == project.id)).all()
     }
 
-    scored_items: list[tuple[int, str, AppUser]] = []
-    for sp in sponsors:
-        sc, rsn = _rule_based_score(project, sp)
-        scored_items.append((sc, rsn, sp))
-
-    scored_items.sort(key=lambda x: x[0], reverse=True)
-    top_items = scored_items[:10]
+    requested = set(db.scalars(select(SponsorRequest.sponsor_id).where(SponsorRequest.project_id == project.id)))
+    eligible = [
+        s
+        for s in sponsors
+        if s.id not in requested and (s.id not in existing_map or existing_map[s.id].status == MatchStatus.suggested)
+    ]
+    # Bound model latency/cost with a deterministic shortlist, then AI ranks it.
+    eligible.sort(key=lambda s: (-_rule_based_score(project, s)[0], str(s.id)))
+    scored_items = (
+        matching.rank_sponsors(project, eligible[:20])
+        if any(n.status == NeedStatus.open for n in project.needs)
+        else []
+    )
+    top_items = sorted(scored_items, key=lambda x: (-x[0], str(x[2].id)))[:10]
+    keep = [sp.id for _, _, sp in top_items]
+    db.execute(
+        delete(SponsorMatch).where(
+            SponsorMatch.project_id == project.id,
+            SponsorMatch.status == MatchStatus.suggested,
+            SponsorMatch.sponsor_id.not_in(keep),
+        )
+    )
 
     rows: list[SponsorMatch] = []
     for sc, rsn, sp in top_items:
@@ -465,6 +480,7 @@ def _compute_and_store_matches(db: Session, project: Project) -> list[SponsorMat
         if existing:
             existing.score = sc
             existing.reason = rsn
+            existing.source = "ai"
             rows.append(existing)
         else:
             m = SponsorMatch(
@@ -472,6 +488,7 @@ def _compute_and_store_matches(db: Session, project: Project) -> list[SponsorMat
                 sponsor_id=sp.id,
                 score=sc,
                 reason=rsn,
+                source="ai",
                 status=MatchStatus.suggested,
             )
             db.add(m)
@@ -504,6 +521,7 @@ def _serialize_match(match: SponsorMatch, names: dict[uuid.UUID, str]) -> Sponso
         sponsor_name=names.get(match.sponsor_id, "Sponsor"),
         score=match.score,
         reason=match.reason,
+        source=match.source,
         status=match.status.value,
     )
 
@@ -512,6 +530,7 @@ def _serialize_match(match: SponsorMatch, names: dict[uuid.UUID, str]) -> Sponso
 def generate_sponsor_matches(project_id: uuid.UUID, user: Organizer, db: DB):
     _require_organizer(user)
     project = _get_owned_project(db, project_id, user.id)
+    db.execute(select(Project.id).where(Project.id == project.id).with_for_update())
     _compute_and_store_matches(db, project)
     db.commit()
     return list_sponsor_matches(project_id, user, db)
@@ -524,9 +543,12 @@ def list_sponsor_matches(project_id: uuid.UUID, user: Organizer, db: DB):
     rows = list(
         db.scalars(
             select(SponsorMatch)
+            .join(AppUser, AppUser.id == SponsorMatch.sponsor_id)
             .where(
                 SponsorMatch.project_id == project.id,
                 SponsorMatch.status != MatchStatus.dismissed,
+                AppUser.status == AccountStatus.active,
+                AppUser.role == UserRole.sponsor,
             )
             .order_by(SponsorMatch.score.desc())
         ).all()
@@ -1015,10 +1037,6 @@ def hide_comment(comment_id: uuid.UUID, user: Organizer, db: DB):
     db.refresh(comment)
     return CommentModerationOut(
         id=comment.id,
-        project_id=comment.project_id,
-        user_id=comment.user_id,
-        kind=comment.kind.value,
-        body=comment.body,
         status=comment.status.value,
     )
 

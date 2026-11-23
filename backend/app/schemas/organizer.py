@@ -164,6 +164,7 @@ class SponsorMatchOut(Schema):
     sponsor_name: str
     score: int
     reason: str
+    source: str = "rules"
     status: str
 
 
@@ -241,8 +242,4 @@ class ProjectMemberOut(Schema):
 
 class CommentModerationOut(Schema):
     id: uuid.UUID
-    project_id: uuid.UUID
-    user_id: uuid.UUID
-    kind: str
-    body: str
     status: str

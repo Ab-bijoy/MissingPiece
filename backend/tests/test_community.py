@@ -80,13 +80,17 @@ def test_comments_visibility_reply_validation(client, f, db):
     db.flush()
     assert client.get(url).json() == []
     assert client.get(url, headers=auth(outsider)).json() == []
-    for viewer in (author, org, f.user(UserRole.admin, "Admin")):
-        assert len(client.get(url, headers=auth(viewer)).json()) == 1
+    for viewer in (author, org, f.user(UserRole.sponsor, "Sponsor")):
+        assert client.get(url, headers=auth(viewer)).json() == []
+    assert len(client.get(url, headers=auth(f.user(UserRole.admin, "Admin"))).json()) == 1
     body = {"kind": "reply", "body": "Reply", "parent_id": str(c.id)}
-    assert client.post(url, json=body, headers=auth(outsider)).status_code == 404
+    for viewer in (outsider, author, org):
+        assert client.post(url, json=body, headers=auth(viewer)).status_code == 404
     assert client.post(f"/api/events/{other.id}/comments", json=body, headers=auth(author)).status_code == 404
     assert client.post(url, json={"kind": "reply", "body": "No parent"}, headers=auth(author)).status_code == 422
 
+    c.status = CommentStatus.visible
+    db.flush()
     organizer_reply = client.post(url, json=body, headers=auth(org))
     assert organizer_reply.status_code == 201
     assert organizer_reply.json()["is_organizer"] is True

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Query, status
 from pydantic import BaseModel, Field
@@ -10,8 +11,9 @@ from sqlalchemy import func, select, update
 from app.auth import DB, ActiveUser
 from app.errors import ApiError, forbidden, not_found
 from app.models import Message, MessageThread, Need, Notification, Offer, Project, SponsorRequest
-from app.models.enums import NotificationType, OfferStage
+from app.models.enums import CommentStatus, NotificationType, OfferStage
 from app.schemas.common import Schema
+from app.services import moderation
 from app.services.notifications import notify
 from app.services.views import name_of, qty_text
 
@@ -40,6 +42,12 @@ class MessageOut(Schema):
     body: str
     read: bool
     created_at: datetime
+    status: str = "visible"
+
+
+class HiddenMessageReceipt(BaseModel):
+    id: uuid.UUID
+    status: Literal["hidden"] = "hidden"
 
 
 class MessageIn(BaseModel):
@@ -78,10 +86,18 @@ def threads(user: ActiveUser, db: DB, limit: int = Query(50, ge=1, le=200), offs
     ).all()
     out = []
     for th, r, n, p in rows:
-        last = db.scalar(select(Message).where(Message.thread_id == th.id).order_by(Message.created_at.desc()).limit(1))
+        last = db.scalar(
+            select(Message)
+            .where(Message.thread_id == th.id, Message.status == CommentStatus.visible)
+            .order_by(Message.created_at.desc())
+            .limit(1)
+        )
         unread = db.scalar(
             select(func.count()).where(
-                Message.thread_id == th.id, Message.read.is_(False), Message.sender_id != user.id
+                Message.thread_id == th.id,
+                Message.status == CommentStatus.visible,
+                Message.read.is_(False),
+                Message.sender_id != user.id,
             )
         )
         offer = db.scalar(
@@ -116,11 +132,20 @@ def threads(user: ActiveUser, db: DB, limit: int = Query(50, ge=1, le=200), offs
 @router.get("/threads/{thread_id}/messages", response_model=list[MessageOut])
 def messages(thread_id: uuid.UUID, user: ActiveUser, db: DB):
     th = _my_thread(db, user, thread_id)
-    msgs = db.scalars(select(Message).where(Message.thread_id == th.id).order_by(Message.created_at)).all()
+    msgs = db.scalars(
+        select(Message)
+        .where(Message.thread_id == th.id, Message.status == CommentStatus.visible)
+        .order_by(Message.created_at)
+    ).all()
     # Opening the conversation marks the other person's messages as read.
     db.execute(
         update(Message)
-        .where(Message.thread_id == th.id, Message.sender_id != user.id, Message.read.is_(False))
+        .where(
+            Message.thread_id == th.id,
+            Message.status == CommentStatus.visible,
+            Message.sender_id != user.id,
+            Message.read.is_(False),
+        )
         .values(read=True)
     )
     db.commit()
@@ -139,17 +164,25 @@ def messages(thread_id: uuid.UUID, user: ActiveUser, db: DB):
     ]
 
 
-@router.post("/threads/{thread_id}/messages", response_model=MessageOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/threads/{thread_id}/messages",
+    response_model=MessageOut | HiddenMessageReceipt,
+    status_code=status.HTTP_201_CREATED,
+)
 def send_message(thread_id: uuid.UUID, body: MessageIn, user: ActiveUser, db: DB):
     th = _my_thread(db, user, thread_id)
     text = body.body.strip()
     if not text:
         raise ApiError(422, "Please write a message first.", "validation")
-    m = Message(thread_id=th.id, sender_id=user.id, body=text)
+    verdict = moderation.status_for_comment(text)
+    m = Message(thread_id=th.id, sender_id=user.id, body=text, status=verdict)
     db.add(m)
     other = th.sponsor_id if user.id == th.organizer_id else th.organizer_id
-    notify(db, other, NotificationType.message_received, th.id, f"{user.name} sent you a message.")
+    if verdict == CommentStatus.visible:
+        notify(db, other, NotificationType.message_received, th.id, f"{user.name} sent you a message.")
     db.commit()
+    if verdict == CommentStatus.hidden:
+        return HiddenMessageReceipt(id=m.id)
     return MessageOut(
         id=m.id,
         thread_id=m.thread_id,

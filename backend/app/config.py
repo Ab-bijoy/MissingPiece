@@ -7,7 +7,7 @@ the host's environment in production. Nothing is hard-coded.
 from decimal import Decimal
 from functools import lru_cache
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     dev_jwt_secret: str = "dev-only-secret-change-me-at-least-32-bytes"
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-20b"
+    groq_moderation_timeout_seconds: float = Field(default=6.0, gt=0, le=30)
 
     payment_provider: str = "mock"
     payment_webhook_secret: str = "dev-webhook-secret"
