@@ -1,6 +1,6 @@
 import { EyeOff } from 'lucide-react'
 import { useState } from 'react'
-import { adminApi, useAdminAction, useHiddenComments, useRestoreComment } from '../../api/admin'
+import { adminApi, useAdminAction, useHiddenComments } from '../../api/admin'
 import { Card, EmptyNote, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
 import { timeAgo } from '../../lib/format'
@@ -20,9 +20,7 @@ export default function AdminComments() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <h1 className="text-[34px] font-bold">Hidden comments</h1>
-      <p className="text-ink-soft">Comments hidden for harmful content or personal contact details, held when AI could not check them, or hidden by organizers. Only admins can view hidden comments. Restore a comment only if it is safe to publish and contains no phone number, email address or private home address.</p>
-      {error && <Notice tone="error">{error.message}</Notice>}
-      {restore.isError && <Notice tone="error">{restore.error instanceof Error ? restore.error.message : 'Could not restore.'}</Notice>}
+      <p className="text-ink-soft">Comments organizers have hidden, for review. Hidden comments are seen only by their author, the organizer and admins.</p>
       {del.isError && (
         <div className="mt-4">
           <Notice tone="error">{del.error instanceof Error ? del.error.message : 'Could not delete.'}</Notice>
@@ -64,6 +62,32 @@ export default function AdminComments() {
           </ul>
         )}
       </Card>
+      <HiddenMessages />
     </main>
+  )
+}
+
+function HiddenMessages() {
+  const { data, isPending, error } = useHiddenMessages()
+  const restore = useAdminAction((id: string) => adminApi.restoreMessage(id))
+  const remove = useAdminAction((id: string) => adminApi.deleteMessage(id))
+  return (
+    <Card className="mt-6">
+      <h2 className="text-xl font-bold">Hidden messages</h2>
+      <p className="mb-4 text-sm text-ink-soft">Only admins can view these messages. Restore only safe messages without personal contact details; restoring delivers them to the conversation.</p>
+      {(error || restore.error || remove.error) && <Notice tone="error">{(error || restore.error || remove.error)?.message ?? 'Could not update messages.'}</Notice>}
+      {isPending ? <Spinner /> : !data?.length ? <EmptyNote>No hidden messages to review.</EmptyNote> : (
+        <ul className="flex flex-col gap-3">{data.map((m) => (
+          <li key={m.id} className="rounded-xl border border-[#E2DED5] p-4">
+            <p className="text-sm text-ink-soft">{m.project_name} · {timeAgo(m.created_at)}</p>
+            <p className="mt-2 whitespace-pre-wrap"><strong>{m.sender_name}:</strong> {m.body}</p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" className={smallBtn.secondary} disabled={restore.isPending || remove.isPending} onClick={() => restore.mutate(m.id)}>Restore message</button>
+              <button type="button" className={smallBtn.primary} disabled={restore.isPending || remove.isPending} onClick={() => confirm('Delete this hidden message permanently?') && remove.mutate(m.id)}>Delete</button>
+            </div>
+          </li>
+        ))}</ul>
+      )}
+    </Card>
   )
 }

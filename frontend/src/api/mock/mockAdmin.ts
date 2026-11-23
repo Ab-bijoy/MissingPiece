@@ -184,6 +184,8 @@ export function handleAdmin(method: string, path: string, body: unknown, me: Me,
   }
 
   // Hidden comments
+  // Demo messages are not sent to AI; real moderation requires the backend.
+  if (path === '/admin/messages' && method === 'GET') return ok([])
   if (path === '/admin/comments' && method === 'GET') {
     const list: AdminComment[] = data.comments
       .filter((c) => c.status === 'hidden')

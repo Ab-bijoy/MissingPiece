@@ -2,51 +2,6 @@
 
 ## Community API
 
-### AI comment moderation
-
-New comments, questions and replies are checked by Groq before being published.
-Standalone direct insults `fuck u` and `fuck you` (including case, punctuation,
-spacing and full-width variants) are always hidden by a local rule before AI.
-This rule matches the entire comment; quoted abuse reports still reach AI review.
-Recognizable phone numbers and email addresses are also hidden by local rules,
-including Bengali/full-width digits, common separators and at/dot email spellings.
-These matches are not sent to Groq. AI checks remaining text for disguised contact
-details and precise private home addresses in English, Bengali and Banglish.
-Self-disclosure and disclosure of someone else's details follow the same rule.
-Broad areas, public event venues, dates and ordinary quantities remain allowed.
-The `personal_information` verdict uses the same hidden-comment visibility and
-admin review workflow; the original text remains stored for authorized review.
-The default is `openai/gpt-oss-20b` with medium reasoning effort, strict JSON schema
-output and local validation. Set `GROQ_API_KEY` in `backend/.env` and restart the
-backend; keep the key out of the frontend. `GROQ_MODEL` must support the same
-structured-output and reasoning parameters. The SDK makes no automatic retries;
-`GROQ_MODERATION_TIMEOUT_SECONDS` defaults to 6 seconds per network operation.
-
-The policy covers targeted abuse, hate, threats, sexual exploitation, encouragement
-of self-harm and violent wrongdoing. It instructs the model to consider English,
-Bengali and Banglish, while allowing criticism, reports of abuse and requests for
-help. These are probabilistic classifications: evaluate language examples before
-relying on them at scale. Only submitted comment text is sent to Groq; credentials,
-account profiles and other comments are not included or logged.
-
-Flagged text is saved as `comment.status = 'hidden'`, never briefly published.
-Missing keys, timeouts, truncated responses or invalid decisions also hold the
-comment hidden for manual review. No migration is needed. Existing comments are
-not scanned retroactively. Only admins can read hidden comments, including those
-already stored. Authors, organizers, sponsors and anonymous viewers cannot retrieve
-them or reply to them. Hidden submissions return only an ID and status, without
-the text, and do not notify organizers. Public lists, previews and counts exclude
-hidden text.
-
-Admins can use **Hidden comments → Restore comment**, backed by
-`POST /api/admin/comments/{comment_id}/restore`, to publish a safe comment after
-review. Leaving a comment hidden and the existing delete action remain available.
-Restoration bypasses AI intentionally and requires an active admin account. The
-demo frontend does not call Groq; use the real API to test moderation.
-
-References: [Groq GPT-OSS 20B](https://console.groq.com/docs/model/openai/gpt-oss-20b)
-and [structured outputs](https://console.groq.com/docs/structured-outputs).
-
 The community routes use the existing `app_user`, `project`, `need`, `offer`,
 `event_membership`, `comment`, `booking`, and `notification` tables. Migration
 `c031_community` adds query indexes; it does not reset or replace existing data.

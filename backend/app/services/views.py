@@ -32,6 +32,29 @@ def qty_text(need: Need) -> str:
     return f"{fmt_number(need.quantity)} {need.unit}"
 
 
+def _stem(word: str) -> str:
+    w = word.lower().strip()
+    return w[:-1] if w.endswith("s") else w
+
+
+def need_phrase(need: Need) -> str:
+    """What is still needed, without saying the same thing twice.
+
+    '200 packs for snacks', 'BDT 20,000 for prize fund', '1 hall for venue', but
+    '3 trainers' (not '3 trainers for trainers') and '1 qa trainer' (not
+    '1 trainer for qa trainer') when the title already names the unit.
+    """
+    title = need.title.strip().lower()
+    if need.type == NeedType.money:
+        return f"{qty_text(need)} for {title}"
+    words = title.split()
+    if words and _stem(words[-1]) == _stem(need.unit):
+        # The title ends with the unit: say the number and the title
+        last = need.unit.lower() if len(words) == 1 else words[-1]
+        return f"{fmt_number(need.quantity)} {' '.join([*words[:-1], last])}"
+    return f"{qty_text(need)} for {title}"
+
+
 def name_of(db: Session, user_id: uuid.UUID) -> str:
     return db.scalar(select(AppUser.name).where(AppUser.id == user_id)) or "Someone"
 

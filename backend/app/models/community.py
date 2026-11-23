@@ -70,11 +70,20 @@ class MessageThread(IdMixin, TimestampMixin, Base):
 
 class Message(IdMixin, TimestampMixin, Base):
     __tablename__ = "message"
-    __table_args__ = (CheckConstraint("length(btrim(body)) > 0", name="body_not_blank"),)
+    __table_args__ = (
+        CheckConstraint("length(btrim(body)) > 0", name="body_not_blank"),
+        Index("ix_message_thread_status_created", "thread_id", "status", "created_at"),
+    )
 
     thread_id: Mapped[uuid.UUID] = fk("message_thread.id")
     sender_id: Mapped[uuid.UUID] = fk("app_user.id")
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[CommentStatus] = mapped_column(
+        pg_enum(CommentStatus, "comment_status"),
+        nullable=False,
+        server_default="visible",
+        default=CommentStatus.visible,
+    )
     read: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
 

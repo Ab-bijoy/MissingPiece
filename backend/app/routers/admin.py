@@ -14,6 +14,8 @@ from app.errors import ApiError, forbidden, not_found
 from app.models import (
     AppUser,
     Comment,
+    Message,
+    MessageThread,
     Need,
     Offer,
     OrganizerProfile,
@@ -21,6 +23,7 @@ from app.models import (
     Project,
     RegistrationDocument,
     SponsorProfile,
+    SponsorRequest,
     Template,
 )
 from app.models.enums import (
@@ -467,6 +470,53 @@ def refunded(payment_id: uuid.UUID, _: Admin, db: DB):
 
 
 # ---- Hidden comments ---------------------------------------------------------------------------
+
+
+class AdminMessageOut(Schema):
+    id: uuid.UUID
+    thread_id: uuid.UUID
+    project_name: str
+    sender_name: str
+    body: str
+    created_at: datetime
+
+
+@router.get("/admin/messages", response_model=list[AdminMessageOut])
+def hidden_messages(_: Admin, db: DB):
+    rows = db.execute(
+        select(Message, AppUser.name, Project.name)
+        .join(AppUser, AppUser.id == Message.sender_id)
+        .join(MessageThread, MessageThread.id == Message.thread_id)
+        .join(SponsorRequest, SponsorRequest.id == MessageThread.request_id)
+        .join(Project, Project.id == SponsorRequest.project_id)
+        .where(Message.status == CommentStatus.hidden)
+        .order_by(Message.created_at.desc(), Message.id)
+        .limit(200)
+    ).all()
+    return [
+        AdminMessageOut(
+            id=m.id, thread_id=m.thread_id, project_name=project, sender_name=name, body=m.body, created_at=m.created_at
+        )
+        for m, name, project in rows
+    ]
+
+
+@router.post("/admin/messages/{message_id}/restore", status_code=204)
+def restore_message(message_id: uuid.UUID, _: Admin, db: DB) -> None:
+    m = db.get(Message, message_id)
+    if m is None:
+        raise not_found("Message")
+    m.status = CommentStatus.visible
+    db.commit()
+
+
+@router.delete("/admin/messages/{message_id}", status_code=204)
+def delete_message(message_id: uuid.UUID, _: Admin, db: DB) -> None:
+    m = db.get(Message, message_id)
+    if m is None:
+        raise not_found("Message")
+    db.delete(m)
+    db.commit()
 
 
 @router.get("/admin/comments", response_model=list[AdminCommentOut])

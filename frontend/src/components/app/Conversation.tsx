@@ -107,9 +107,13 @@ export default function Conversation({
           autoComplete="off"
         />
         <button type="submit" className={`${smallBtn.primary} min-h-12`} disabled={send.isPending || !text.trim()}>
-          <Send className="size-4" aria-hidden /> Send
+          <Send className="size-4" aria-hidden /> {send.isPending ? 'Checking…' : 'Send'}
         </button>
       </form>
+      <p className="px-5 pb-3 text-sm text-ink-soft">Messages are checked before delivery. Do not share phone numbers, email addresses or private home addresses.</p>
+      {send.isSuccess && 'status' in send.data && send.data.status === 'hidden' && (
+        <div className="px-5 pb-4"><Notice>Your message was not delivered. Only admins can view it for review.</Notice></div>
+      )}
       {send.isError && (
         <div className="px-5 pb-4">
           <Notice tone="error">{send.error instanceof Error ? send.error.message : 'Could not send.'}</Notice>

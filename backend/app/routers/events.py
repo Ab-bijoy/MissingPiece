@@ -12,7 +12,7 @@ from app.models.enums import NeedType, ProjectStatus
 from app.schemas.common import NeedOut
 from app.schemas.sponsor import EventDetail, EventNeed, EventSummary
 from app.services import loaders
-from app.services.views import qty_text
+from app.services.views import need_phrase
 
 router = APIRouter(prefix="/api", tags=["events"])
 
@@ -38,7 +38,7 @@ def list_events(user: ActiveUser, db: DB, limit: int = Query(50, ge=1, le=200), 
         out.append(
             EventSummary(
                 **facts[p.id].model_dump(),
-                still_needed=[f"{qty_text(n)} for {n.title.lower()}" for n in still_open],
+                still_needed=[need_phrase(n) for n in still_open],
                 open_needs=len(still_open),
                 needs_money=any(n.type == NeedType.money for n in still_open),
             )

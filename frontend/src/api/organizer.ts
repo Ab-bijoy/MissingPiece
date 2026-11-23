@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
+import type { CommentPostResult } from './user'
 import type {
   AppNotification,
   Benefit,
@@ -16,6 +17,9 @@ import type {
   ProjectSummary,
   Readiness,
   RequestInput,
+  SentRequest,
+  SponsorPublicProfile,
+  SponsorSearchResult,
   SponsorMatchList,
   Template,
   Thread,
@@ -43,6 +47,10 @@ export const organizerApi = {
   generateMatches: (projectId: string) =>
     api<SponsorMatchList>(`/projects/${projectId}/sponsor-matches`, { method: 'POST' }),
   matches: (projectId: string) => api<SponsorMatchList>(`/projects/${projectId}/sponsor-matches`),
+  sponsorProfile: (sponsorId: string) => api<SponsorPublicProfile>(`/sponsors/${sponsorId}`),
+  sentRequests: (projectId: string) => api<SentRequest[]>(`/projects/${projectId}/requests`),
+  searchSponsors: (projectId: string, q: string) =>
+    api<SponsorSearchResult[]>('/sponsors/search', { query: { project_id: projectId, q } }),
   dismissMatch: (id: string) => api<void>(`/sponsor-matches/${id}/dismiss`, { method: 'POST' }),
   sendRequest: (projectId: string, body: RequestInput) =>
     api<{ id: string; thread_id: string }>(`/projects/${projectId}/requests`, { method: 'POST', json: body }),
@@ -62,11 +70,11 @@ export const organizerApi = {
   // Shared (7.6)
   comments: (projectId: string) => api<Comment[]>(`/events/${projectId}/comments`),
   postComment: (projectId: string, body: { kind: CommentKind; body: string; parent_id: string | null }) =>
-    api<Comment>(`/events/${projectId}/comments`, { method: 'POST', json: body }),
+    api<CommentPostResult>(`/events/${projectId}/comments`, { method: 'POST', json: body }),
   threads: () => api<Thread[]>('/threads'),
   messages: (threadId: string) => api<Message[]>(`/threads/${threadId}/messages`),
   sendMessage: (threadId: string, body: string) =>
-    api<Message>(`/threads/${threadId}/messages`, { method: 'POST', json: { body } }),
+    api<Message | { id: string; status: 'hidden' }>(`/threads/${threadId}/messages`, { method: 'POST', json: { body } }),
   notifications: () => api<AppNotification[]>('/notifications'),
   readNotification: (id: string) => api<void>(`/notifications/${id}/read`, { method: 'POST' }),
   readAllNotifications: () => api<void>('/notifications/read-all', { method: 'POST' }),
@@ -84,6 +92,9 @@ export const qk = {
   offers: (id: string) => ['project', id, 'offers'] as const,
   comments: (id: string) => ['project', id, 'comments'] as const,
   report: (id: string) => ['project', id, 'report'] as const,
+  requests: (id: string) => ['project', id, 'requests'] as const,
+  sponsor: (id: string) => ['sponsor-profile', id] as const,
+  sponsorSearch: (id: string, q: string) => ['project', id, 'sponsor-search', q] as const,
   threads: ['threads'] as const,
   messages: (id: string) => ['threads', id, 'messages'] as const,
   notifications: ['notifications'] as const,
@@ -100,6 +111,20 @@ export const useMatches = (id: string, enabled = true) =>
 export const useOffers = (id: string) => useQuery({ queryKey: qk.offers(id), queryFn: () => organizerApi.offers(id) })
 export const useComments = (id: string) =>
   useQuery({ queryKey: qk.comments(id), queryFn: () => organizerApi.comments(id) })
+export const useSponsorPublicProfile = (id: string | null) =>
+  useQuery({ queryKey: qk.sponsor(id ?? ''), queryFn: () => organizerApi.sponsorProfile(id!), enabled: !!id, staleTime: 5 * 60_000 })
+
+/** Requests already sent (refreshed by every project action, e.g. sending one) */
+export const useSentRequests = (id: string, enabled = true) =>
+  useQuery({ queryKey: qk.requests(id), queryFn: () => organizerApi.sentRequests(id), enabled })
+/** Sponsors on the platform; `q` is matched against company, industry, location and interests */
+export const useSponsorSearch = (id: string, q: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.sponsorSearch(id, q),
+    queryFn: () => organizerApi.searchSponsors(id, q),
+    enabled,
+    placeholderData: (previous) => previous, // keep the old results on screen while typing
+  })
 export const useReport = (id: string) => useQuery({ queryKey: qk.report(id), queryFn: () => organizerApi.report(id) })
 export const useThreads = () =>
   useQuery({ queryKey: qk.threads, queryFn: organizerApi.threads, refetchInterval: 30_000 })

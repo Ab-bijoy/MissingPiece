@@ -227,3 +227,4 @@ __marimo__/
 # Local document uploads (backend dev storage)
 backend/uploads/
 docs/
+backend/test_org.ps1

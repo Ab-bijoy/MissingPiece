@@ -33,30 +33,30 @@ function seed(): MockAccount[] {
     }),
     acc('cse', 'csesociety@example.org', {
       role: 'organizer', status: 'active', name: 'CSE Society', age: null, rejection_note: null,
-      profile: { org_name: 'CSE Society', org_type: 'university', registration_number: 'DU-CSE-0420', contact_person: 'Nusrat Jahan', phone: '+880 1700 000001' },
+      profile: { org_name: 'CSE Society', org_type: 'university', registration_number: 'DU-CSE-0420', contact_person: 'Nusrat Jahan', phone: '01700000001' },
     }),
     acc('greenhands', 'contact@greenhands.example', {
       role: 'organizer', status: 'pending_approval', name: 'Green Hands NGO', age: null, rejection_note: null,
-      profile: { org_name: 'Green Hands NGO', org_type: 'ngo', registration_number: 'NGO-2231', contact_person: 'Nadia Islam', phone: '+880 1700 000002' },
+      profile: { org_name: 'Green Hands NGO', org_type: 'ngo', registration_number: 'NGO-2231', contact_person: 'Nadia Islam', phone: '01700000002' },
     }),
     acc('brightfuture', 'team@brightfuture.example', {
       role: 'organizer', status: 'active', name: 'Bright Future NGO', age: null, rejection_note: null,
-      profile: { org_name: 'Bright Future NGO', org_type: 'ngo', registration_number: 'NGO-1187', contact_person: 'Farzana Haque', phone: '+880 1700 000006' },
+      profile: { org_name: 'Bright Future NGO', org_type: 'ngo', registration_number: 'NGO-1187', contact_person: 'Farzana Haque', phone: '01700000006' },
     }),
     acc('scienceclub', 'scienceclub@example.org', {
       role: 'organizer', status: 'active', name: 'Science Club', age: null, rejection_note: null,
-      profile: { org_name: 'Science Club', org_type: 'university', registration_number: 'DU-SC-0311', contact_person: 'Imran Kabir', phone: '+880 1700 000007' },
+      profile: { org_name: 'Science Club', org_type: 'university', registration_number: 'DU-SC-0311', contact_person: 'Imran Kabir', phone: '01700000007' },
     }),
     acc('youth', 'youthclub@example.org', {
       role: 'organizer', status: 'rejected', name: 'Riverside Youth Club', age: null,
       rejection_note: 'The proof document was unreadable. Please register again with a clear scan.',
-      profile: { org_name: 'Riverside Youth Club', org_type: 'community_group', registration_number: 'CG-0099', contact_person: 'Karim Uddin', phone: '+880 1700 000003' },
+      profile: { org_name: 'Riverside Youth Club', org_type: 'community_group', registration_number: 'CG-0099', contact_person: 'Karim Uddin', phone: '01700000003' },
     }),
     acc('examplesoft', 'csr@examplesoftware.example', {
       role: 'sponsor', status: 'active', name: 'Example Software Co.', age: null, rejection_note: null,
       profile: {
         company: 'Example Software Co.', industry: 'Software', trade_license_number: 'TL-55821', contact_person: 'Tanvir Hasan',
-        phone: '+880 1700 000004', interests: ['education', 'technology', 'youth'], preferred_types: ['money', 'equipment'],
+        phone: '01700000004', interests: ['education', 'technology', 'youth'], preferred_types: ['money', 'equipment'],
         location: 'Dhaka', description: 'We support student tech events and digital learning.',
       },
     }),
@@ -64,7 +64,7 @@ function seed(): MockAccount[] {
       role: 'sponsor', status: 'pending_approval', name: 'Fresh Foods Ltd.', age: null, rejection_note: null,
       profile: {
         company: 'Fresh Foods Ltd.', industry: 'Food', trade_license_number: 'TL-77310', contact_person: 'Shamima Akter',
-        phone: '+880 1700 000005', interests: ['community'], preferred_types: ['product'], location: 'Dhaka', description: null,
+        phone: '01700000005', interests: ['community'], preferred_types: ['product'], location: 'Dhaka', description: null,
       },
     }),
     ...(
@@ -81,7 +81,7 @@ function seed(): MockAccount[] {
         role: 'sponsor', status: 'active', name: company, age: null, rejection_note: null,
         profile: {
           company, industry, trade_license_number: `TL-${id.toUpperCase()}`, contact_person: 'Demo contact',
-          phone: '+880 1700 000010', interests: [...interests], preferred_types: [...types], location: 'Dhaka', description: null,
+          phone: '01700000010', interests: [...interests], preferred_types: [...types], location: 'Dhaka', description: null,
         },
       }),
     ),

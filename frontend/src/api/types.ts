@@ -142,6 +142,7 @@ export type SponsorMatch = {
   sponsor_name: string
   score: number
   reason: string
+  source?: 'ai' | 'rules'
   status: MatchStatus
 }
 export type SponsorMatchList = { matches: SponsorMatch[]; requests_left: number }
@@ -155,6 +156,47 @@ export type RequestInput = {
   exclusive_category: string | null
   decide_by: string | null
   deliver_by: string | null
+}
+
+/** GET /projects/{id}/requests: one request already sent */
+export type SentRequestState = 'waiting' | 'offer_received' | 'accepted' | 'received' | 'declined' | 'withdrawn' | 'expired'
+export type SentRequest = {
+  id: string
+  need_id: string
+  need_title: string
+  sponsor_id: string
+  sponsor_name: string
+  created_at: string
+  decide_by: string | null
+  state: SentRequestState
+  offer_id: string | null
+  thread_id: string | null
+}
+
+/** GET /sponsors/{id}: what organizers see about a sponsor (never contact details) */
+export type SponsorPublicProfile = {
+  id: string
+  name: string
+  industry: string | null
+  location: string | null
+  interests: string[]
+  preferred_types: NeedType[]
+  description: string | null
+  member_since: string
+  /** Totals only */
+  contributions_received: number
+  projects_supported: number
+}
+
+/** GET /sponsors/search: a sponsor's public profile (never their contact details) */
+export type SponsorSearchResult = {
+  id: string
+  name: string
+  industry: string | null
+  location: string | null
+  interests: string[]
+  /** Already asked for something in this project */
+  requested: boolean
 }
 
 export type Benefit = { id: string; offer_id: string; label: string; given: boolean; given_at: string | null }
