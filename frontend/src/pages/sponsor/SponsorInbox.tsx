@@ -265,7 +265,7 @@ function OfferPanel({ r }: { r: SponsorRequestDetail }) {
           {send.isPending ? 'Sending…' : 'Send offer'}
         </button>
         <p className="text-sm text-ink-soft">
-          {isMoney ? 'You can withdraw until the payment goes through.' : 'You can withdraw until the organizer marks it received.'}
+          {isMoney ? 'You can withdraw until you start paying.' : 'You can withdraw until the organizer marks it received.'}
         </p>
       </form>
     </Card>

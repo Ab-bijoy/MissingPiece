@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { UserRole } from '../../../api/types'
-import { authService } from '../../../auth/authService'
-import { LOGIN_PATH } from '../../../auth/roles'
+import { authApi } from '../../../api/auth'
+import { LOGIN_PATH, ROLE_LABEL } from '../../../auth/roles'
 import { TextField } from '../../../components/ui/Field'
 import Notice from '../../../components/ui/Notice'
 import { btn } from '../../../components/ui/buttons'
@@ -11,7 +11,9 @@ import AuthLayout, { AuthHeading } from './AuthLayout'
 /** Password reset uses Supabase's reset flow (build prompt 3.1). */
 export default function ForgotPasswordPage() {
   const [params] = useSearchParams()
-  const role = (params.get('role') as UserRole | null) ?? 'general'
+  const asked = params.get('role')
+  // Only the four real roles; anything else in the address means the general user page
+  const role: UserRole = asked && asked in LOGIN_PATH ? (asked as UserRole) : 'general'
   const back = LOGIN_PATH[role] ?? '/login'
 
   const [email, setEmail] = useState('')
@@ -28,7 +30,8 @@ export default function ForgotPasswordPage() {
     }
     setBusy(true)
     try {
-      await authService.resetPassword(email.trim())
+      // Our API checks the role: a sponsor page cannot send a reset link to an admin account.
+      await authApi.requestPasswordReset(email.trim(), role)
       setSent(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send the email. Please try again.')
@@ -40,10 +43,15 @@ export default function ForgotPasswordPage() {
   return (
     <AuthLayout>
       <form onSubmit={submit} className="flex flex-col gap-4.5" noValidate>
-        <AuthHeading title="Reset your password" intro="Enter your email and we will send you a link to set a new password." />
+        <AuthHeading
+          chip={ROLE_LABEL[role]}
+          title="Reset your password"
+          intro={`Enter the email of your ${ROLE_LABEL[role].toLowerCase()} account and we will send you a link to set a new password.`}
+        />
         {sent ? (
           <Notice tone="success">
-            If an account uses <strong>{email}</strong>, a reset link is on its way. Check your inbox and spam folder.
+            If a {ROLE_LABEL[role].toLowerCase()} account uses <strong>{email}</strong>, a reset link is on its way. Check your inbox and
+            spam folder. Have a different kind of account? Use the “Forgot password?” link on its own log-in page.
           </Notice>
         ) : (
           <>

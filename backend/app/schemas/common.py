@@ -1,5 +1,6 @@
 """Shared schema pieces. Response shapes match frontend/src/api/types.ts."""
 
+import re
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -72,3 +73,17 @@ class EventFacts(Schema):
     status: str
     participants: int
     contributors: int
+
+
+# ---- Shared input rules -------------------------------------------------------------
+
+AGE_MIN, AGE_MAX = 13, 100  # general users: teenagers and up
+_PHONE = re.compile(r"^01[3-9]\d{8}$")  # Bangladeshi mobile: 11 digits, 013-019
+
+
+def clean_phone(value: str) -> str:
+    """An 11-digit Bangladeshi mobile number, like 01712345678. Spaces and dashes are removed."""
+    digits = re.sub(r"[\s-]", "", value or "")
+    if not _PHONE.fullmatch(digits):
+        raise ValueError("Enter an 11-digit mobile number, like 01712345678.")
+    return digits

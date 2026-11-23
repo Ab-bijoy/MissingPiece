@@ -169,3 +169,22 @@ def test_missing_store_details_refused(client, scene, f, monkeypatch):
     f.accept(o["id"])
     r = client.post(f"/api/offers/{o['id']}/payments", json={"method": "card"}, headers=auth(scene["sponsor"]))
     assert r.status_code == 503 and r.json()["code"] == "no_gateway"
+
+
+def test_second_start_waits_for_the_first(client, scene, f, db, ssl):
+    """With a real gateway, a second payment is refused while the first is in progress."""
+    offer_id, res = start(client, scene, f)
+    again = client.post(f"/api/offers/{offer_id}/payments", json={}, headers=auth(scene["sponsor"]))
+    assert again.status_code == 409 and again.json()["code"] == "payment_in_progress"
+    assert len(ssl.sessions) == 1
+
+
+def test_start_notices_a_payment_that_finished_meanwhile(client, scene, f, db, ssl):
+    """The sponsor paid but the browser never came back: the next Pay click finds out and stops."""
+    offer_id, res = start(client, scene, f)
+    tran_id = tran_of(db, res["payment_id"])
+    ssl.paid[tran_id] = ("VALID", "BDT", "21000.00")
+    again = client.post(f"/api/offers/{offer_id}/payments", json={}, headers=auth(scene["sponsor"]))
+    assert again.status_code == 409 and again.json()["code"] == "already_paid"
+    db.expire_all()
+    assert db.get(Offer, offer_id).stage == OfferStage.received
