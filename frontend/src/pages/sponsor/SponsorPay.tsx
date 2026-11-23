@@ -1,17 +1,11 @@
 import { CircleCheck } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import type { FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { sponsorApi, usePaymentQuote, useSponsorAction } from '../../api/sponsor'
 import { Card, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
 import { bdt } from '../../lib/format'
 import { safeHttpUrl } from '../../lib/safe'
-
-const METHODS = [
-  { key: 'wallet', label: 'Mobile wallet' },
-  { key: 'card', label: 'Debit or credit card' },
-  { key: 'bank', label: 'Internet banking' },
-]
 
 /**
  * Pay an accepted offer (prototype "Sponsor · Pay", rule 10): amount + 5%
@@ -21,8 +15,7 @@ export default function SponsorPay() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { data: q, isPending, isError, error } = usePaymentQuote(id!)
-  const [method, setMethod] = useState('wallet')
-  const pay = useSponsorAction(() => sponsorApi.pay(id!, method))
+  const pay = useSponsorAction(() => sponsorApi.pay(id!))
   const withdraw = useSponsorAction(() => sponsorApi.withdraw(id!))
 
   if (isPending) return <Spinner />
@@ -82,29 +75,13 @@ export default function SponsorPay() {
 
         <Card>
           <form onSubmit={submit} className="flex flex-col gap-4">
-            <fieldset>
-              <legend className="mb-2 text-xl font-bold">Payment method</legend>
-              <div className="flex flex-col gap-2">
-                {METHODS.map((m) => (
-                  <label
-                    key={m.key}
-                    className={`flex min-h-13 cursor-pointer items-center gap-3 rounded-[10px] border px-4 ${
-                      method === m.key ? 'border-2 border-accent bg-[#F2F8F7]' : 'border-[#C9C3B6]'
-                    }`}
-                  >
-                    <input type="radio" name="pm" value={m.key} checked={method === m.key} onChange={() => setMethod(m.key)} className="size-5 accent-accent" />
-                    {m.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
             {pay.isError && <Notice tone="error">{pay.error instanceof Error ? pay.error.message : 'Could not start the payment.'}</Notice>}
             <button type="submit" className={`${smallBtn.primary} min-h-14 text-lg`} disabled={pay.isPending}>
               {pay.isPending ? 'Opening payment…' : `Pay ${bdt(q.total)}`}
             </button>
             <p className="text-[15px] text-ink-soft">
-              You will go to the payment provider's secure page. Once the payment goes through, your offer is marked received and can no
-              longer be withdrawn.
+              You will go to the payment provider's secure page, where you can pay by card, mobile wallet or internet banking. Once
+              the payment goes through, your offer is marked received and can no longer be withdrawn.
             </p>
           </form>
         </Card>

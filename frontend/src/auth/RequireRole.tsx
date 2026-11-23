@@ -29,7 +29,7 @@ export default function RequireRole({ role, children }: { role: UserRole; childr
   }, [needsDevLogin, role, loadMe, qc])
 
   if (signedIn === null || meLoading || needsDevLogin) return <FullPageSpinner />
-  if (!signedIn || !me) return <Navigate to={LOGIN_PATH[role]} replace state={{ from: location.pathname }} />
+  if (!signedIn || !me) return <Navigate to={LOGIN_PATH[role]} replace state={{ from: location.pathname + location.search }} />
   if (problem) return <Navigate to={LOGIN_PATH[role]} replace state={{ notice: problem }} />
 
   return <>{children}</>

@@ -8,6 +8,7 @@ sponsor can retry. A money offer becomes received only when its payment succeeds
 
 import hashlib
 import hmac
+import logging
 import uuid
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
@@ -22,7 +23,10 @@ from app.models import AppUser, Need, Offer, Payment, Project, Receipt
 from app.models.enums import NeedType, NotificationType, OfferStage, PaymentStatus
 from app.schemas.sponsor import PaymentQuote, PaymentStart
 from app.services.notifications import notify
+from app.services.sslcommerz import NOT_PAID, PAID, CheckoutInfo, SslCommerzGateway
 from app.services.views import fmt_number, name_of
+
+log = logging.getLogger("app.payments")
 
 CENT = Decimal("0.01")
 
@@ -44,7 +48,7 @@ def split(amount: Decimal) -> Amounts:
 
 
 class PaymentGateway(Protocol):
-    def checkout_url(self, payment: Payment, api_base: str) -> str: ...
+    def checkout_url(self, payment: Payment, api_base: str, info: CheckoutInfo) -> str: ...
     def verify(self, payment_id: str, status: str, amount: str, signature: str) -> bool: ...
 
 
@@ -56,7 +60,7 @@ def sign(payment_id: str, status: str, amount: str) -> str:
 class MockGateway:
     """Fake gateway: a page in this API that lets you choose success or failure."""
 
-    def checkout_url(self, payment: Payment, api_base: str) -> str:
+    def checkout_url(self, payment: Payment, api_base: str, info: CheckoutInfo) -> str:
         return f"{api_base.rstrip('/')}/api/payments/mock-checkout/{payment.id}"
 
     def verify(self, payment_id: str, status: str, amount: str, signature: str) -> bool:
@@ -65,11 +69,19 @@ class MockGateway:
         return hmac.compare_digest(sign(payment_id, status, amount), signature)
 
 
+def sslcommerz_gateway() -> SslCommerzGateway:
+    s = get_settings()
+    if not (s.sslcommerz_store_id and s.sslcommerz_store_password):
+        raise ApiError(503, "SSLCommerz is not set up: fill in the store id and password.", "no_gateway")
+    return SslCommerzGateway(s.sslcommerz_store_id, s.sslcommerz_store_password, s.sslcommerz_sandbox)
+
+
 def gateway() -> PaymentGateway:
     provider = get_settings().payment_provider
     if provider == "mock":
         return MockGateway()
-    # DECISION (build prompt 10): a Bangladeshi gateway in sandbox mode goes here.
+    if provider == "sslcommerz":
+        return sslcommerz_gateway()
     raise ApiError(503, f"Payment provider '{provider}' is not set up yet.", "no_gateway")
 
 
@@ -107,14 +119,23 @@ def quote(db: Session, sponsor: AppUser, offer_id: uuid.UUID) -> PaymentQuote:
 
 def start(db: Session, sponsor: AppUser, offer_id: uuid.UUID, api_base: str) -> PaymentStart:
     """POST /offers/{id}/payments: create a pending payment and return the checkout URL."""
-    o, _, _ = _my_money_offer(db, sponsor, offer_id)
+    o, n, p = _my_money_offer(db, sponsor, offer_id)
     if o.stage != OfferStage.accepted:
         raise ApiError(409, "You can pay only after the organizer accepts your offer.", "bad_stage")
     a = split(o.amount)  # type: ignore[arg-type]
     pay = Payment(offer_id=o.id, gross_amount=a.total, commission_amount=a.commission, net_amount=a.amount)
     db.add(pay)
     db.flush()
-    url = gateway().checkout_url(pay, api_base)
+    profile = sponsor.sponsor_profile
+    info = CheckoutInfo(
+        customer_name=(profile.contact_person if profile else "") or sponsor.name,
+        customer_email=sponsor.email,
+        customer_phone=profile.phone if profile else "",
+        customer_address=(profile.location or "") if profile else "",
+        product_name=f"{n.title} for {p.name}",
+    )
+    base = get_settings().api_public_url or api_base
+    url = gateway().checkout_url(pay, base, info)
     db.commit()
     return PaymentStart(payment_id=pay.id, checkout_url=url)
 
@@ -167,3 +188,43 @@ def settle(db: Session, payment_id: uuid.UUID, succeeded: bool, gross: Decimal |
         )
     db.commit()
     return pay
+
+
+def confirm_sslcommerz(db: Session, tran_id: str, val_id: str | None) -> Payment:
+    """Called by the SSLCommerz success, fail, cancel and IPN addresses.
+
+    Nothing in the callback is trusted: the answer comes from SSLCommerz's own APIs,
+    checked against our tran_id, the currency and the exact amount we asked for.
+    """
+    pay = db.scalar(select(Payment).where(Payment.gateway_ref == tran_id))
+    if pay is None:
+        raise not_found("Payment")
+    if pay.status != PaymentStatus.pending:
+        return pay  # already settled (the browser and the IPN both arrive)
+
+    gw = sslcommerz_gateway()
+    if val_id:
+        answers = [gw.validate(val_id)]
+    else:
+        answers = gw.lookup(tran_id)
+
+    def matches(a: dict) -> bool:
+        return str(a.get("tran_id") or "") == tran_id
+
+    paid = [a for a in answers if matches(a) and str(a.get("status") or "").upper() in PAID]
+    if paid:
+        a = paid[0]
+        currency = str(a.get("currency_type") or a.get("currency") or "").upper()
+        try:
+            amount = Decimal(str(a.get("currency_amount") or a.get("amount") or ""))
+        except ArithmeticError:
+            amount = None
+        if currency != "BDT" or amount != pay.gross_amount:
+            # Paid, but not what we asked for: leave it pending for an admin to look at.
+            log.warning("SSLCommerz amount mismatch on %s: %s %s", tran_id, currency, amount)
+            raise ApiError(400, "The paid amount does not match.", "amount_mismatch")
+        return settle(db, pay.id, True, pay.gross_amount)
+
+    if any(matches(a) and str(a.get("status") or "").upper() in NOT_PAID for a in answers):
+        return settle(db, pay.id, False)
+    return pay  # SSLCommerz has no final answer yet: stays pending

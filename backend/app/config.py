@@ -37,6 +37,13 @@ class Settings(BaseSettings):
 
     payment_provider: str = "mock"
     payment_webhook_secret: str = "dev-webhook-secret"
+    # SSLCommerz (PAYMENT_PROVIDER=sslcommerz). Sandbox store: developer.sslcommerz.com/registration
+    sslcommerz_store_id: str = ""
+    sslcommerz_store_password: str = ""
+    sslcommerz_sandbox: bool = True  # false = real money
+    # The backend's public address for gateway callbacks, e.g. https://api.example.com.
+    # Empty = the address the request came in on (fine on localhost).
+    api_public_url: str = ""
     platform_commission_rate: Decimal = Decimal("0.05")
 
     # Email for approval and rejection notices (build prompt 10: SMTP, off until filled in).
