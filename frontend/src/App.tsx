@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import RequireRole from './auth/RequireRole'
 import TestingBar from './components/app/TestingBar'
+import ScrollToTop from './components/ScrollToTop'
 import AdminAccounts from './pages/admin/AdminAccounts'
 import AdminApprovals from './pages/admin/AdminApprovals'
 import AdminComments from './pages/admin/AdminComments'
@@ -46,6 +47,7 @@ import SponsorsLanding from './pages/public/roles/SponsorsLanding'
 export default function App() {
   return (
     <>
+    <ScrollToTop />
     <TestingBar />
     <Routes>
       {/* Landing pages */}

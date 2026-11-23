@@ -7,9 +7,7 @@ import { HOME_PATH, loginProblem, SIGNUP_PATH } from '../../../auth/roles'
 import { TextField } from '../../../components/ui/Field'
 import Notice from '../../../components/ui/Notice'
 import { btn } from '../../../components/ui/buttons'
-import { mockDb } from '../../../api/mock/mockDb'
 import AuthLayout, { AuthHeading } from './AuthLayout'
-import DemoHint from './DemoHint'
 
 const COPY: Record<
   UserRole,
@@ -84,7 +82,7 @@ export default function LoginPage({ role }: { role: UserRole }) {
       const me = await loadMe()
       if (!me) {
         await signOut()
-        setError('Your email is confirmed, but your account is not set up yet. Please sign up again to finish.')
+        setError('Your email is confirmed, but your profile is not set up yet. Fill in the sign-up form again with the same email and password to finish.')
         return
       }
       const problem = loginProblem(me, role)

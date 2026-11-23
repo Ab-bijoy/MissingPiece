@@ -1,5 +1,5 @@
-import { Paperclip } from 'lucide-react'
-import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
+import { Eye, EyeOff, Paperclip } from 'lucide-react'
+import { useId, useState, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
 
 const control =
   'mt-1.5 block min-h-13 w-full rounded-[10px] border border-[#C9C3B6] bg-white px-3.5 text-[17px] font-normal text-ink placeholder:text-[#8C857A] focus:border-brand focus:outline-3 focus:outline-offset-0 focus:outline-brand/25 aria-invalid:border-warning'
@@ -26,20 +26,43 @@ function Messages({ id, hint, error }: { id: string; hint?: ReactNode; error?: s
 const describedBy = (id: string, hint?: ReactNode, error?: string | null) =>
   [hint ? `${id}-hint` : '', error ? `${id}-err` : ''].filter(Boolean).join(' ') || undefined
 
-export function TextField({ label, hint, error, ...props }: Common & InputHTMLAttributes<HTMLInputElement>) {
+export function TextField({ label, hint, error, type, ...props }: Common & InputHTMLAttributes<HTMLInputElement>) {
   const id = useId()
+  const isPassword = type === 'password'
+  const [shown, setShown] = useState(false)
+  const input = (
+    <input
+      id={id}
+      type={isPassword && shown ? 'text' : type}
+      className={isPassword ? `${control} pr-13` : control}
+      aria-invalid={error ? true : undefined}
+      aria-describedby={describedBy(id, hint, error)}
+      {...props}
+    />
+  )
   return (
     <div>
       <label htmlFor={id} className="font-bold">
         {label}
       </label>
-      <input
-        id={id}
-        className={control}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(id, hint, error)}
-        {...props}
-      />
+      {isPassword ? (
+        // Password fields get a small eye button to show or hide what was typed.
+        <div className="relative">
+          {input}
+          <button
+            type="button"
+            onClick={() => setShown((v) => !v)}
+            aria-label={shown ? 'Hide password' : 'Show password'}
+            aria-pressed={shown}
+            aria-controls={id}
+            className="absolute top-1/2 right-1 inline-flex size-11 -translate-y-1/2 items-center justify-center rounded-lg text-ink-soft hover:text-ink focus-visible:text-ink"
+          >
+            {shown ? <EyeOff className="size-5" aria-hidden /> : <Eye className="size-5" aria-hidden />}
+          </button>
+        </div>
+      ) : (
+        input
+      )}
       <Messages id={id} hint={hint} error={error} />
     </div>
   )

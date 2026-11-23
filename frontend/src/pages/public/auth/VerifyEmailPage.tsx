@@ -49,6 +49,21 @@ export default function VerifyEmailPage() {
     return () => clearTimeout(t)
   }, [seconds])
 
+  /** Email is verified and we are logged in: create the profile and move on. */
+  async function finish(p: PendingSignup) {
+    try {
+      await register(p)
+    } catch (e) {
+      // 409 already_registered = profile created on an earlier try; carry on.
+      if (!(e instanceof ApiError && e.status === 409 && e.code === 'already_registered')) throw e
+    }
+    await loadMe()
+    const name = p.role === 'general' ? p.name : p.displayName
+    pendingSignup.clear()
+    if (p.role === 'general') navigate(HOME_PATH.general, { replace: true })
+    else navigate('/registration-sent', { replace: true, state: { name, email: p.email, role: p.role } })
+  }
+
   async function verify(full: string) {
     if (!pending || busy) return
     if (full.length !== 6) {
@@ -59,24 +74,31 @@ export default function VerifyEmailPage() {
     setBusy(true)
     setError(null)
     try {
-      await authService.verifyOtp(pending.email, full)
       try {
-        await register(pending)
+        await authService.verifyOtp(pending.email, full)
       } catch (e) {
-        // 409 = profile already created on an earlier try; carry on.
-        if (!(e instanceof ApiError && e.status === 409)) throw e
+        // A code works once. If it was already accepted (we are logged in), finish anyway.
+        if (!(await authService.getAccessToken())) throw e
       }
-      await loadMe()
-      const role = pending.role
-      const name = pending.role === 'general' ? pending.name : pending.displayName
-      pendingSignup.clear()
-      if (role === 'general') navigate(HOME_PATH.general, { replace: true })
-      else navigate('/registration-sent', { replace: true, state: { name, email: pending.email, role } })
+      await finish(pending)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not verify the code. Please try again.')
       setBusy(false)
     }
   }
+
+  // Already verified and logged in (for example after signing up again): no code needed.
+  useEffect(() => {
+    if (!pending) return
+    void authService.getAccessToken().then((token) => {
+      if (!token) return
+      setBusy(true)
+      finish(pending).catch((e) => {
+        setError(e instanceof Error ? e.message : 'Could not finish signing up. Please try again.')
+        setBusy(false)
+      })
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Submit by itself once all six digits are in (once per code).
   useEffect(() => {
