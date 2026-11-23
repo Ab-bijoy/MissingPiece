@@ -45,8 +45,11 @@ class JoinIn(BaseModel):
     def valid_role(self):
         if self.switch_from_participant and self.role != "contributor":
             raise ValueError("Only a helper application can switch from participant")
-        if self.role == "contributor" and (not self.need_id or not self.contribution_role):
-            raise ValueError("Choose a need and contribution role")
+        if self.role == "contributor" and not self.need_id:
+            raise ValueError("Choose what you can help with")
+        if self.role == "contributor" and not self.contribution_role:
+            # The screens offer Participant or Contributor; "trainer" is still accepted from older clients.
+            self.contribution_role = "contributor"
         if self.role == "participant" and any((self.need_id, self.contribution_role, self.slot_start, self.slot_end)):
             raise ValueError("Participants cannot submit contribution details")
         if bool(self.slot_start) != bool(self.slot_end):

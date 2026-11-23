@@ -2,7 +2,7 @@ import { Check, Clock3, MapPin, MessageCircleQuestion, Users } from 'lucide-reac
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { addComment, joinAtOnce, refreshAfter, useProgram, useProgramComments, userApi, useUserAction } from '../../api/user'
-import type { Comment, ContributionRole, ProgramDetail } from '../../api/types'
+import type { Comment, ProgramDetail } from '../../api/types'
 import Notice from '../../components/ui/Notice'
 import { SkeletonList } from '../../components/ui/Skeleton'
 import { formatDate, slotText, timeAgo } from '../../lib/format'
@@ -15,7 +15,7 @@ const TZ = 'Asia/Dhaka'
 
 /**
  * Program page (prototype "General user B · Program page"): cover, details,
- * discussion, and a contribute panel where the role dropdown (Trainer or
+ * discussion, and a take-part panel where the choice (Participant or
  * Contributor) changes the button text.
  */
 export default function ProgramPage() {
@@ -53,7 +53,8 @@ export default function ProgramPage() {
         <aside className="flex flex-col gap-6">
           <Details p={p} />
           <People p={p} />
-          <Contribute p={p} />
+          {/* Start fresh when the membership changes (e.g. after cancelling a seat) */}
+          <Contribute key={p.my_membership?.role ?? "none"} p={p} />
         </aside>
       </div>
     </main>
@@ -100,7 +101,7 @@ function Hero({ p }: { p: ProgramDetail }) {
               <Check className="size-5" aria-hidden /> {p.seats_left <= 0 ? 'Program is full' : 'Join as participant'}
             </button>
           )}
-          {canApply && p.my_membership?.role === 'participant' && <LeaveProgramButton programId={p.id} />}
+          {canApply && p.my_membership?.role === 'participant' && <LeaveProgramButton programId={p.id} programName={p.name} />}
           {canApply && p.my_membership?.role !== 'contributor' && p.needs.some((n) => n.state === 'open' && ['skill', 'time', 'equipment', 'space'].includes(n.type)) && (
             <a href="#contribute" className={ubtn.soft}>
               {p.my_membership?.role === 'participant' ? 'Switch to helping' : 'Offer to help'}
@@ -163,8 +164,8 @@ function About({ p }: { p: ProgramDetail }) {
       )}
       <h3 className="mt-5 font-bold">Ways to help</h3>
       <ul className="mt-2 list-disc space-y-1 pl-5">
-        <li>Trainer: lead a short learning session</li>
-        <li>Contributor: help on the day, give your time, or lend something listed above</li>
+        <li>Participant: come along and take part</li>
+        <li>Contributor: teach a session, help on the day, give your time, or lend something listed above</li>
       </ul>
     </section>
   )
@@ -300,24 +301,55 @@ function People({ p }: { p: ProgramDetail }) {
   )
 }
 
+type Way = 'participant' | 'contributor'
+
+/**
+ * Take part: choose Participant or Contributor. The button follows the choice:
+ * "Join as participant" (no need to pick) or "Apply as contributor" (pick what you
+ * can help with). A participant can switch to contributing, which frees their seat.
+ */
 function Contribute({ p }: { p: ProgramDetail }) {
   const today = useDhakaToday()
   const canApply = acceptsApplications(p, today)
   const switching = p.my_membership?.role === 'participant'
   const options = p.needs.filter((n) => n.state === 'open' && ['skill', 'time', 'equipment', 'space'].includes(n.type))
-  const [role, setRole] = useState<ContributionRole>(options.some((n) => n.type === 'skill') ? 'trainer' : 'contributor')
+  const seatFree = p.seats_left > 0
+  const [way, setWay] = useState<Way>(switching || !seatFree ? 'contributor' : 'participant')
   const [needId, setNeedId] = useState('')
-  const eligible = options.filter((n) => role !== 'trainer' || n.type === 'skill')
-  const selected = eligible.find((n) => n.id === needId) ?? eligible[0]
-  const join = useUserAction(() =>
-    userApi.join(p.id, { role: 'contributor', contribution_role: role, need_id: selected!.id, switch_from_participant: switching }),
+  const selected = options.find((n) => n.id === needId) ?? options[0]
+
+  const joinAsParticipant = useUserAction(
+    () => userApi.join(p.id, { role: 'participant' }),
+    () => refreshAfter.join(p.id),
+    undefined,
+    (qc) => joinAtOnce(qc, p.id),
+  )
+  const applyAsContributor = useUserAction(
+    () =>
+      userApi.join(p.id, {
+        role: 'contributor',
+        contribution_role: 'contributor',
+        need_id: selected!.id,
+        switch_from_participant: switching,
+      }),
     () => refreshAfter.join(p.id),
   )
-  const label = switching ? 'Switch to helping and release my seat' : role === 'trainer' ? 'Apply as trainer' : 'Apply as contributor'
+  const action = way === 'participant' ? joinAsParticipant : applyAsContributor
+  const blocked = way === 'participant' ? switching || !seatFree : !selected
+  const label =
+    way === 'participant'
+      ? switching
+        ? 'You are already attending'
+        : seatFree
+          ? 'Join as participant'
+          : 'Program is full'
+      : switching
+        ? 'Switch to contributing and release my seat'
+        : 'Apply as contributor'
 
   return (
     <section id="contribute" className={`${card} scroll-mt-36`}>
-      <h2 className="text-lg font-bold">Contribute to this program</h2>
+      <h2 className="text-lg font-bold">Take part in this program</h2>
       {!canApply ? (
         <p className="mt-2 text-ink-soft">{programEnded(p, today) ? 'This program has ended.' : 'This program is not accepting applications.'}</p>
       ) : p.my_membership?.role === 'contributor' ? (
@@ -325,43 +357,72 @@ function Contribute({ p }: { p: ProgramDetail }) {
           {membershipStatus(p.my_membership)}
           <p className="text-ink-soft">You can change or withdraw your offer on My contributions.</p>
         </div>
-      ) : options.length === 0 ? (
-        <p className="mt-2 text-ink-soft">Everything this program needs is covered right now.</p>
       ) : (
         <form
           className="mt-3 flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault()
-            join.mutate(undefined)
+            if (!blocked) action.mutate(undefined)
           }}
         >
-          {switching && <Notice tone="info">Switching releases your participant seat immediately. You will be waiting for organizer approval as a helper. If the application cannot be sent, you keep your seat.</Notice>}
-          <p className="inline-flex items-center gap-1.5 font-semibold text-warning">
-            <Clock3 className="size-4" aria-hidden /> {options.map((o) => o.title).join(', ')}: still needed
-          </p>
           <label className="font-semibold">
-            Contribution role
-            <select value={role} onChange={(e) => setRole(e.target.value as ContributionRole)} className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal">
-              <option value="trainer" disabled={!options.some((n) => n.type === 'skill')}>Trainer</option>
-              <option value="contributor">Contributor</option>
+            Take part as
+            <select
+              value={way}
+              onChange={(e) => {
+                setWay(e.target.value as Way)
+                joinAsParticipant.reset()
+                applyAsContributor.reset()
+              }}
+              className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal"
+            >
+              <option value="participant" disabled={switching || !seatFree}>
+                Participant{switching ? ' (you are attending)' : seatFree ? '' : ' (full)'}
+              </option>
+              <option value="contributor" disabled={options.length === 0}>
+                Contributor{options.length === 0 ? ' (nothing needed right now)' : ''}
+              </option>
             </select>
           </label>
-          <label className="font-semibold">
-            What you can help with
-            <select value={selected?.id ?? ''} onChange={(e) => setNeedId(e.target.value)} className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal">
-              {eligible.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.title}
-                  {slotText(n.slot_start, n.slot_end) ? `, ${slotText(n.slot_start, n.slot_end)}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          {join.isError && <Notice tone="error">{join.error instanceof Error ? join.error.message : 'Could not send.'}</Notice>}
-          <button type="submit" className={`${ubtn.primary} min-h-14 text-lg`} disabled={join.isPending || !selected || !canApply}>
-            {join.isPending ? 'Sending…' : label}
+
+          {way === 'participant' ? (
+            <p className="text-ink-soft">
+              Come along and take part. {p.seats_left} of {p.audience} seats left.
+            </p>
+          ) : (
+            <>
+              {switching && (
+                <Notice tone="info">
+                  Switching releases your participant seat. You will be waiting for organizer approval as a contributor. If the
+                  application cannot be sent, you keep your seat.
+                </Notice>
+              )}
+              <p className="inline-flex items-center gap-1.5 font-semibold text-warning">
+                <Clock3 className="size-4" aria-hidden /> {options.map((o) => o.title).join(', ')}: still needed
+              </p>
+              <label className="font-semibold">
+                What you can help with
+                <select
+                  value={selected?.id ?? ''}
+                  onChange={(e) => setNeedId(e.target.value)}
+                  className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal"
+                >
+                  {options.map((n) => (
+                    <option key={n.id} value={n.id}>
+                      {n.title}
+                      {slotText(n.slot_start, n.slot_end) ? `, ${slotText(n.slot_start, n.slot_end)}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+
+          {action.isError && <Notice tone="error">{action.error instanceof Error ? action.error.message : 'Could not send.'}</Notice>}
+          <button type="submit" className={`${ubtn.primary} min-h-14 text-lg`} disabled={action.isPending || blocked}>
+            {action.isPending ? 'Sending…' : label}
           </button>
-          <p className="text-sm text-ink-soft">The organizer checks every contributor before the program.</p>
+          {way === 'contributor' && <p className="text-sm text-ink-soft">The organizer checks every contributor before the program.</p>}
         </form>
       )}
     </section>

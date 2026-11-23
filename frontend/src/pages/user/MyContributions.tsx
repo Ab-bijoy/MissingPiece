@@ -76,7 +76,7 @@ export default function MyContributions() {
                   </Link>
                   {m.role === 'participant' && acceptsApplications(m.project, today) && (
                     <>
-                      <LeaveProgramButton programId={m.project.id} />
+                      <LeaveProgramButton programId={m.project.id} programName={m.project.name} />
                       <Link to={`/programs/${m.project.id}#contribute`} className={ubtn.soft}>Switch to helping</Link>
                     </>
                   )}

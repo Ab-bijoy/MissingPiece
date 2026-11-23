@@ -1,33 +1,45 @@
 import { useState } from 'react'
 import { refreshAfter, userApi, useUserAction } from '../../api/user'
-import Notice from '../../components/ui/Notice'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { ubtn } from './bits'
 
-export default function LeaveProgramButton({ programId }: { programId: string }) {
-  const [confirming, setConfirming] = useState(false)
+/** "I can't come any more" for participants: confirms in a modal, then frees the seat. */
+export default function LeaveProgramButton({ programId, programName }: { programId: string; programName?: string }) {
+  const [open, setOpen] = useState(false)
   const leave = useUserAction(() => userApi.leave(programId), () => refreshAfter.join(programId))
+
   return (
-    <div>
+    <>
       <button
         type="button"
         className={ubtn.ghost}
         disabled={leave.isPending}
-        onClick={() => setConfirming(true)}
+        onClick={() => {
+          leave.reset()
+          setOpen(true)
+        }}
       >
         {leave.isPending ? 'Cancelling…' : "I can't come any more"}
       </button>
-      {confirming && (
-        <div role="group" aria-label="Confirm attendance cancellation" className="mt-2 rounded-xl bg-user-bg p-3">
-          <p>Your seat will become available to someone else.</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" className={ubtn.primary} disabled={leave.isPending} onClick={() => leave.mutate(undefined)}>
-              {leave.isPending ? 'Cancelling…' : 'Confirm cancellation'}
-            </button>
-            <button type="button" className={ubtn.soft} disabled={leave.isPending} onClick={() => setConfirming(false)}>Keep my seat</button>
-          </div>
-        </div>
-      )}
-      {leave.isError && <Notice tone="error">{leave.error instanceof Error ? leave.error.message : 'Could not cancel attendance.'}</Notice>}
-    </div>
+      <ConfirmDialog
+        open={open}
+        title="Cancel your seat?"
+        confirmLabel={leave.isPending ? 'Cancelling…' : 'Yes, cancel my seat'}
+        cancelLabel="Keep my seat"
+        busy={leave.isPending}
+        error={leave.isError ? (leave.error instanceof Error ? leave.error.message : 'Could not cancel your seat.') : null}
+        onClose={() => setOpen(false)}
+        onConfirm={() => leave.mutate(undefined, { onSuccess: () => setOpen(false) })}
+      >
+        {programName ? (
+          <>
+            You will no longer attend <strong className="text-ink">{programName}</strong>. Your seat becomes available to someone
+            else.
+          </>
+        ) : (
+          'Your seat becomes available to someone else.'
+        )}
+      </ConfirmDialog>
+    </>
   )
 }
