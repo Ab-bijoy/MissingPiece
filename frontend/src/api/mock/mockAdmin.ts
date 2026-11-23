@@ -190,6 +190,13 @@ export function handleAdmin(method: string, path: string, body: unknown, me: Me,
       .map((c) => ({ ...c, author_name: nameOf(c.user_id), project_name: data.projects.find((p) => p.id === c.project_id)?.name ?? '' }))
     return ok(list)
   }
+  g = m(/^\/admin\/comments\/([^/]+)\/restore$/)
+  if (g && method === 'POST') {
+    const c = data.comments.find((c) => c.id === g![1])
+    if (!c) return fail(404, 'Comment not found.', 'not_found')
+    c.status = 'visible'
+    return done(ok(undefined, 204))
+  }
   g = m(/^\/admin\/comments\/([^/]+)$/)
   if (g && method === 'DELETE') {
     if (!data.comments.some((c) => c.id === g![1])) return fail(404, 'Comment not found.', 'not_found')

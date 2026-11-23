@@ -76,7 +76,15 @@ def db() -> Iterator[Session]:
 
 
 @pytest.fixture
-def client(db: Session) -> Iterator[TestClient]:
+def client(db: Session, monkeypatch) -> Iterator[TestClient]:
+    # Integration tests exercise visibility deterministically, without sending
+    # fixture comments to an external AI service or spending API credits.
+    from app.services import moderation
+
+    monkeypatch.setattr(get_settings(), "groq_api_key", "test-key-not-used-for-network")
+    monkeypatch.setattr(
+        moderation, "_request_verdict", lambda body: moderation.Verdict(decision="allow", category="none")
+    )
     app.dependency_overrides[get_db] = lambda: db
     try:
         yield TestClient(app)

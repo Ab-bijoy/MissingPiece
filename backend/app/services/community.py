@@ -3,7 +3,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import aliased
 
 from app.errors import ApiError, not_found
@@ -41,10 +41,9 @@ def membership(db, project_id, user):
 
 def comment_query(p, user):
     q = select(Comment).where(Comment.project_id == p.id)
-    if user and (user.id == p.organizer_id or user.role == UserRole.admin):
+    if user and user.role == UserRole.admin:
         return q
-    visible = Comment.status == CommentStatus.visible
-    return q.where(or_(visible, Comment.user_id == user.id) if user else visible)
+    return q.where(Comment.status == CommentStatus.visible)
 
 
 def comment_out(db, c):

@@ -37,6 +37,7 @@ export const adminApi = {
 
   hiddenComments: () => api<AdminComment[]>('/admin/comments', { query: { status: 'hidden' } }),
   deleteComment: (id: string) => api<void>(`/admin/comments/${id}`, { method: 'DELETE' }),
+  restoreComment: (id: string) => api<void>(`/admin/comments/${id}/restore`, { method: 'POST' }),
 
   /** GET /files/{document_id}: a short-lived download link (admin or owner) */
   fileLink: (documentId: string) => api<{ url: string | null }>(`/files/${documentId}`),
@@ -59,6 +60,18 @@ export const useAdminUsers = () => useQuery({ queryKey: aqk.users, queryFn: () =
 export const useAdminTemplates = () => useQuery({ queryKey: aqk.templates, queryFn: adminApi.templates })
 export const useAdminPayments = () => useQuery({ queryKey: aqk.payments, queryFn: adminApi.payments })
 export const useHiddenComments = () => useQuery({ queryKey: aqk.comments, queryFn: adminApi.hiddenComments })
+
+export function useRestoreComment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: adminApi.restoreComment,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: aqk.comments })
+      void qc.invalidateQueries({ queryKey: ['user', 'feed'] })
+      void qc.invalidateQueries({ queryKey: ['user', 'program'] })
+    },
+  })
+}
 
 /** Runs an admin action, then refreshes every admin list. */
 export function useAdminAction<TVars, TOut = unknown>(fn: (vars: TVars) => Promise<TOut>) {

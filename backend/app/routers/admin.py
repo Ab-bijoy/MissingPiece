@@ -495,6 +495,16 @@ def admin_comments(_: Admin, db: DB, status_: Literal["hidden", "visible"] = Que
     ]
 
 
+@router.post("/admin/comments/{comment_id}/restore", status_code=status.HTTP_204_NO_CONTENT)
+def restore_comment(comment_id: uuid.UUID, _: Admin, db: DB) -> None:
+    """Human review may restore an AI false positive or a comment held during an outage."""
+    c = db.get(Comment, comment_id)
+    if c is None:
+        raise not_found("Comment")
+    c.status = CommentStatus.visible
+    db.commit()
+
+
 @router.delete("/admin/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_comment(comment_id: uuid.UUID, _: Admin, db: DB) -> None:
     """Deletes the comment and its replies (replies cascade)."""

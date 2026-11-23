@@ -6,6 +6,8 @@ import type { Comment, CommentKind, FeedItem, JoinInput, MyContribution, MyMembe
 // General user calls from build prompt 7.5, plus comments (7.6).
 // Organizer profile (GET/PATCH /organizer/profile) is not in the prompt yet.
 
+export type CommentPostResult = Comment | { id: string; status: 'hidden' }
+
 export const userApi = {
   feed: () => api<FeedItem[]>('/feed'),
   program: (id: string) => api<ProgramDetail>(`/events/${id}`),
@@ -17,7 +19,7 @@ export const userApi = {
   saveProfile: (body: Partial<MyProfile>) => api<MyProfile>('/me/profile', { method: 'PATCH', json: body }),
   comments: (id: string) => api<Comment[]>(`/events/${id}/comments`),
   postComment: (id: string, body: { kind: CommentKind; body: string; parent_id: string | null }) =>
-    api<Comment>(`/events/${id}/comments`, { method: 'POST', json: body }),
+    api<CommentPostResult>(`/events/${id}/comments`, { method: 'POST', json: body }),
   orgProfile: () => api<OrganizerProfileView>('/organizer/profile'),
   saveOrgProfile: (body: Partial<OrganizerProfileView>) =>
     api<OrganizerProfileView>('/organizer/profile', { method: 'PATCH', json: body }),
@@ -82,7 +84,8 @@ export const refreshAfter = {
 }
 
 /** Put a new comment into the program's comment list straight away, without reloading it. */
-export function addComment(qc: QueryClient, programId: string, c: Comment) {
+export function addComment(qc: QueryClient, programId: string, c: CommentPostResult) {
+  if (!('body' in c) || c.status !== 'visible') return
   qc.setQueryData<Comment[]>(uqk.comments(programId), (old) => (old ? [...old, c] : old))
 }
 
