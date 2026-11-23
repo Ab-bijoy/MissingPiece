@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type InvalidateQueryFilters, type QueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import { acceptsApplications, useDhakaToday } from '../lib/programDates'
-import type { Comment, CommentKind, FeedItem, JoinInput, MyContribution, MyProfile, OrganizerProfileView, ProgramDetail } from './types'
+import type { Comment, CommentKind, FeedItem, JoinInput, MyContribution, MyMembership, MyProfile, OrganizerProfileView, ProgramDetail } from './types'
 
 // General user calls from build prompt 7.5, plus comments (7.6).
 // Organizer profile (GET/PATCH /organizer/profile) is not in the prompt yet.
@@ -30,6 +30,18 @@ export const uqk = {
   memberships: ['user', 'memberships'] as const,
   profile: ['user', 'profile'] as const,
   orgProfile: ['organizer', 'profile'] as const,
+}
+
+/**
+ * Start loading a page when the pointer rests on (or a keyboard focuses) a link to it,
+ * so it is usually ready by the time it is clicked. Spread the result on the link.
+ */
+export function usePrefetchProgram() {
+  const qc = useQueryClient()
+  return (id: string) => {
+    const load = () => void qc.prefetchQuery({ queryKey: uqk.program(id), queryFn: () => userApi.program(id), staleTime: 30_000 })
+    return { onMouseEnter: load, onFocus: load, onTouchStart: load }
+  }
 }
 
 export const useFeed = () => {
@@ -74,6 +86,25 @@ export function addComment(qc: QueryClient, programId: string, c: Comment) {
   qc.setQueryData<Comment[]>(uqk.comments(programId), (old) => (old ? [...old, c] : old))
 }
 
+/**
+ * Show "Attending" straight away after Join, with one more participant and one seat
+ * fewer. If the server refuses (full, closed), the refresh that follows every action
+ * puts the true numbers back and the page shows the server's message.
+ */
+export function joinAtOnce(qc: QueryClient, programId: string) {
+  const joined = <T extends { my_membership: MyMembership; participants: number; seats_left: number }>(p: T): T =>
+    p.my_membership
+      ? p
+      : {
+          ...p,
+          my_membership: { id: 'pending', role: 'participant', status: 'approved' },
+          participants: p.participants + 1,
+          seats_left: Math.max(0, p.seats_left - 1),
+        }
+  qc.setQueryData<ProgramDetail>(uqk.program(programId), (p) => (p ? joined(p) : p))
+  qc.setQueryData<FeedItem[]>(uqk.feed, (list) => list?.map((f) => (f.id === programId ? joined(f) : f)))
+}
+
 /** Put saved profile details into the cache, without reloading the profile. */
 export function setProfile(qc: QueryClient, profile: MyProfile) {
   qc.setQueryData(uqk.profile, profile)
@@ -87,10 +118,20 @@ export function useUserAction<TVars, TOut = unknown>(
   fn: (vars: TVars) => Promise<TOut>,
   refresh: (vars: TVars) => InvalidateQueryFilters[],
   onData?: (qc: QueryClient, result: TOut, vars: TVars) => void,
+  /** Change the screen before the server answers (see joinAtOnce) */
+  atOnce?: (qc: QueryClient, vars: TVars) => void,
 ) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fn,
+    onMutate: (vars) => {
+      if (!atOnce) return
+      // Loads already under way are cancelled so their (older) answers are thrown away.
+      // Not awaited: a request already sent cannot be stopped, and waiting for it would
+      // delay the instant change by a whole round trip.
+      void qc.cancelQueries({ queryKey: ['user'] })
+      atOnce(qc, vars)
+    },
     onSuccess: (result, vars) => onData?.(qc, result, vars),
     onSettled: (_result, _error, vars) => {
       for (const filters of refresh(vars)) void qc.invalidateQueries(filters)

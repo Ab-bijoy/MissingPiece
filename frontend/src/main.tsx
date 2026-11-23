@@ -6,6 +6,7 @@ import { ApiError } from './api/client'
 import App from './App.tsx'
 import { AuthProvider } from './auth/AuthProvider'
 import './index.css'
+import { keepCacheSaved, restoreCache } from './lib/persistCache'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,7 +20,10 @@ const queryClient = new QueryClient({
   },
 })
 
-createRoot(document.getElementById('root')!).render(
+// Show the last data straight away (this account only), then keep saving it.
+void restoreCache(queryClient).finally(() => {
+  keepCacheSaved(queryClient)
+  createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -30,3 +34,4 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 )
+})

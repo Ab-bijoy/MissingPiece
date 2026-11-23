@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { authApi } from '../api/auth'
 import { ApiError } from '../api/client'
 import type { Me } from '../api/types'
+import { forgetSavedCache } from '../lib/persistCache'
 import { authService } from './authService'
 
 type AuthState = {
@@ -36,7 +37,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return authService.onChange((s) => {
       setSignedIn(s)
       if (s) void queryClient.invalidateQueries({ queryKey: ['me'] }) // a new session may be a different account
-      else queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' })
+      else {
+        queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' })
+        forgetSavedCache()
+      }
       if (!s) queryClient.setQueryData(['me'], null)
     })
   }, [queryClient])
@@ -54,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSignedIn(false)
     queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' })
     queryClient.setQueryData(['me'], null)
+    forgetSavedCache() // the saved copy in this browser goes too
   }, [queryClient])
 
   const value = useMemo<AuthState>(

@@ -46,6 +46,21 @@ export const sqk = {
   event: (id: string) => ['events', id] as const,
 }
 
+/**
+ * Start loading a page when the pointer rests on (or a keyboard focuses) a link to it,
+ * so it is usually ready by the time it is clicked. Spread the result on the link.
+ */
+export function usePrefetchSponsor() {
+  const qc = useQueryClient()
+  const on = (load: () => void) => ({ onMouseEnter: load, onFocus: load, onTouchStart: load })
+  return {
+    request: (id: string) =>
+      on(() => void qc.prefetchQuery({ queryKey: sqk.request(id), queryFn: () => sponsorApi.request(id), staleTime: 30_000 })),
+    quote: (offerId: string) =>
+      on(() => void qc.prefetchQuery({ queryKey: sqk.quote(offerId), queryFn: () => sponsorApi.quote(offerId), staleTime: 30_000 })),
+  }
+}
+
 export const useSponsorRequests = () => useQuery({ queryKey: sqk.requests, queryFn: sponsorApi.requests, refetchInterval: 30_000 })
 export const useSponsorRequest = (id: string | null) =>
   useQuery({ queryKey: sqk.request(id ?? ''), queryFn: () => sponsorApi.request(id!), enabled: !!id })

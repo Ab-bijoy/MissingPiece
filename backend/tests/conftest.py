@@ -53,6 +53,15 @@ from app.models.enums import (  # noqa: E402
 get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _fresh_user_cache():
+    from app import user_cache
+
+    user_cache.clear()
+    yield
+    user_cache.clear()
+
+
 @pytest.fixture
 def db() -> Iterator[Session]:
     conn = engine.connect()

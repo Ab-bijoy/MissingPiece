@@ -4,9 +4,10 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
+from sqlalchemy.orm import aliased
 
-from app.errors import ApiError, must, not_found
-from app.models import Comment, EventMembership, Need, Offer, Project
+from app.errors import ApiError, not_found
+from app.models import AppUser, Comment, EventMembership, Need, Offer, Project
 from app.models.enums import (
     CommentStatus,
     MembershipRole,
@@ -63,20 +64,20 @@ def community_fields(db, p, user):
     return loaders.community_fields_many(db, [p], user, facts)[p.id]
 
 
-def feed_items(db, projects, user):
-    """The feed page: about 10 queries in total, whatever the number of programs."""
+def feed_items(db, projects, user, stats=None):
+    """The feed page in 3 or 4 queries, whatever the number of programs.
+
+    Pass `stats` when the programs were loaded with loaders.stat_columns() (the feed
+    router does): their numbers then come with them, at no extra cost.
+    """
     if not projects:
         return []
     pids = [p.id for p in projects]
-    needs = loaders.needs_by_project(db, pids)
-    holds = loaders.holding_offers(db, (n.id for ns in needs.values() for n in ns))
-    roots, replies = loaders.comment_previews(db, pids)
-    # One name lookup for organizers and comment authors together
-    nm = loaders.names(
-        db, [p.organizer_id for p in projects] + [c.user_id for c in roots] + [r.user_id for r in replies.values()]
-    )
-    facts = loaders.event_facts_many(db, projects, known_names=nm)
-    community = loaders.community_fields_many(db, projects, user, facts)
+    stats = stats if stats is not None else loaders.project_stats(db, projects)
+    needs, holds = loaders.needs_and_holds(db, pids)  # 1 query
+    roots, replies, nm = loaders.comment_previews(db, pids)  # 1 query, names included
+    facts = loaders.event_facts_many(db, projects, stats=stats)  # no query
+    community = loaders.community_fields_many(db, projects, user, facts, stats)  # 1 query if signed in
 
     previews_by_project = {pid: [] for pid in pids}
     organizer_of = {p.id: p.organizer_id for p in projects}
@@ -197,25 +198,19 @@ def join(db, user, project_id, body):
 
 
 def memberships(db, user):
-    """My contributions: 5 queries for any number of memberships."""
-    rows = db.scalars(
-        select(EventMembership)
+    """My contributions: one query for any number of memberships."""
+    organizer = aliased(AppUser)
+    rows = db.execute(
+        select(EventMembership, Project, Offer, Need, organizer.name)
+        .join(Project, Project.id == EventMembership.project_id)
+        .outerjoin(Offer, Offer.id == EventMembership.offer_id)
+        .outerjoin(Need, Need.id == Offer.need_id)
+        .outerjoin(organizer, organizer.id == Project.organizer_id)
         .where(EventMembership.user_id == user.id)
         .order_by(EventMembership.created_at.desc(), EventMembership.id)
     ).all()
-    if not rows:
-        return []
-    projects = {p.id: p for p in db.scalars(select(Project).where(Project.id.in_({m.project_id for m in rows})))}
-    offer_ids = {m.offer_id for m in rows if m.offer_id}
-    offers = {o.id: o for o in db.scalars(select(Offer).where(Offer.id.in_(offer_ids)))} if offer_ids else {}
-    need_ids = {o.need_id for o in offers.values()}
-    needs = {n.id: n for n in db.scalars(select(Need).where(Need.id.in_(need_ids)))} if need_ids else {}
-    nm = loaders.names(db, (p.organizer_id for p in projects.values()))
     result = []
-    for m in rows:
-        p = must(projects.get(m.project_id))
-        o = offers.get(m.offer_id) if m.offer_id else None
-        n = needs.get(o.need_id) if o else None
+    for m, p, o, n, organizer_name in rows:
         result.append(
             {
                 "membership_id": m.id,
@@ -226,7 +221,7 @@ def memberships(db, user):
                     "name": p.name,
                     "event_date": p.event_date,
                     "venue": p.venue,
-                    "organizer_name": nm.get(p.organizer_id, "Someone"),
+                    "organizer_name": organizer_name or "Someone",
                     "status": p.status,
                 },
                 "offer": {

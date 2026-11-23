@@ -1,12 +1,14 @@
 import { Search } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useFeed } from '../../api/user'
+import { useFeed, usePrefetchProgram } from '../../api/user'
 import { formatDate } from '../../lib/format'
+import { SkeletonList } from '../../components/ui/Skeleton'
 import { card, Cover, DateBadge, myStatusPill } from './bits'
 
 /** Programs near me: every live program as a card, with search. */
 export default function ProgramsList() {
   const { data: feed, isPending } = useFeed()
+  const ahead = usePrefetchProgram()
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
   const term = q.trim().toLowerCase()
@@ -27,12 +29,17 @@ export default function ProgramsList() {
           className="min-h-14 w-full rounded-2xl bg-white pr-4 pl-12 shadow-sm ring-1 ring-black/10"
         />
       </label>
-      {isPending && <p className="mt-6 text-ink-soft">Loading…</p>}
+      {isPending && (
+        <div className="mt-6 grid gap-5 sm:grid-cols-2">
+          <SkeletonList count={2} kind="card" />
+          <SkeletonList count={2} kind="card" />
+        </div>
+      )}
       {!isPending && shown.length === 0 && <p className={`${card} mt-6`}>No programs match “{q}”.</p>}
       <ul className="mt-6 grid gap-5 sm:grid-cols-2">
         {shown.map((f) => (
           <li key={f.id}>
-            <Link to={`/programs/${f.id}`} className="block overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 hover:ring-user-accent">
+            <Link {...ahead(f.id)} to={`/programs/${f.id}`} className="block overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 hover:ring-user-accent">
               <Cover className="h-28" />
               <div className="flex gap-4 p-5">
                 <DateBadge date={f.event_date} />

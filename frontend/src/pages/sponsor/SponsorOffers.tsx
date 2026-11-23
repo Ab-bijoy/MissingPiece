@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from 'react-router-dom'
-import { sponsorApi, useSponsorAction, useSponsorOffers } from '../../api/sponsor'
+import { sponsorApi, usePrefetchSponsor, useSponsorAction, useSponsorOffers } from '../../api/sponsor'
 import type { OfferStage, SponsorOfferRow } from '../../api/types'
 import { Card, EmptyNote, Pill, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
@@ -81,12 +81,13 @@ function benefitsText(r: SponsorOfferRow) {
 }
 
 function NextStep({ r, onWithdraw, busy }: { r: SponsorOfferRow; onWithdraw: () => void; busy: boolean }) {
+  const ahead = usePrefetchSponsor()
   const ask = r.request_id ? `/sponsor?request=${r.request_id}` : '/sponsor'
   switch (r.stage) {
     case 'accepted':
       if (r.need_type === 'money' && r.amount)
         return (
-          <Link to={`/sponsor/offers/${r.id}/pay`} className={smallBtn.primary}>
+          <Link {...ahead.quote(r.id)} to={`/sponsor/offers/${r.id}/pay`} className={smallBtn.primary}>
             Pay {bdt(r.amount + Math.round(r.amount * 5) / 100)}
             {r.payment_status === 'failed' && <span className="sr-only"> (last try failed)</span>}
           </Link>

@@ -22,7 +22,6 @@ from typing import Annotated
 
 import jwt
 from fastapi import Depends, Header
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -30,6 +29,7 @@ from app.db import get_db
 from app.errors import ApiError
 from app.models import AppUser
 from app.models.enums import AccountStatus, UserRole
+from app.user_cache import load_user
 
 DEV_ISSUER = "missingpiece-dev"
 # Seconds of clock difference to tolerate between this server and Supabase.
@@ -123,7 +123,7 @@ def current_user_optional(
     claims: Annotated[Claims, Depends(token_claims)], db: Annotated[Session, Depends(get_db)]
 ) -> AppUser | None:
     """The app_user for this token, or None while someone is still signing up."""
-    return db.scalar(select(AppUser).where(AppUser.supabase_user_id == claims.supabase_user_id))
+    return load_user(db, claims.supabase_user_id)  # kept in memory briefly: see user_cache.py
 
 
 def current_user(user: Annotated[AppUser | None, Depends(current_user_optional)]) -> AppUser:

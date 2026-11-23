@@ -1,7 +1,7 @@
 import { ArrowLeft, Check } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { sponsorApi, useSponsorAction, useSponsorProfile, useSponsorRequest, useSponsorRequests } from '../../api/sponsor'
+import { sponsorApi, usePrefetchSponsor, useSponsorAction, useSponsorProfile, useSponsorRequest, useSponsorRequests } from '../../api/sponsor'
 import type { SponsorRequestDetail } from '../../api/types'
 import Conversation from '../../components/app/Conversation'
 import { Card, EmptyNote, Pill, smallBtn, Spinner } from '../../components/app/ui'
@@ -16,6 +16,7 @@ const commission = (n: number) => Math.round(n * 0.05 * 100) / 100
 export default function SponsorInbox() {
   const { data: requests, isPending } = useSponsorRequests()
   const [params, setParams] = useSearchParams()
+  const ahead = usePrefetchSponsor()
   const selected = params.get('request')
 
   // On wide screens, open the newest request by default.
@@ -47,6 +48,7 @@ export default function SponsorInbox() {
                   <li key={r.id}>
                     <button
                       type="button"
+                      {...ahead.request(r.id)}
                       onClick={() => setParams({ request: r.id })}
                       aria-current={r.id === selected ? 'true' : undefined}
                       className={`w-full rounded-xl px-3 py-3 text-left ${r.id === selected ? 'bg-[#E6F1EE]' : 'hover:bg-paper'}`}
@@ -170,6 +172,7 @@ function OfferPanel({ r }: { r: SponsorRequestDetail }) {
     }),
   )
   const withdraw = useSponsorAction((offerId: string) => sponsorApi.withdraw(offerId))
+  const ahead = usePrefetchSponsor()
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -200,7 +203,7 @@ function OfferPanel({ r }: { r: SponsorRequestDetail }) {
             )}
             <div className="flex flex-wrap gap-2">
               {r.state === 'accepted' && isMoney && (
-                <Link to={`/sponsor/offers/${o.id}/pay`} className={`${smallBtn.primary} min-h-12`}>
+                <Link {...ahead.quote(o.id)} to={`/sponsor/offers/${o.id}/pay`} className={`${smallBtn.primary} min-h-12`}>
                   Pay {bdt(amount + commission(amount))}
                 </Link>
               )}

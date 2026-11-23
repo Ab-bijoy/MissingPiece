@@ -242,3 +242,21 @@ def test_dhaka_cutoff_feed_and_actions(client, f, db, monkeypatch):
     assert client.get("/api/me/memberships", headers=auth(a)).json()[0]["project"]["id"] == str(past.id)
     assert client.post(f"/api/events/{today.id}/join", headers=auth(a), json={"role": "participant"}).status_code == 204
     assert client.post(f"/api/events/{today.id}/leave", headers=auth(a)).status_code == 204
+
+
+def test_contributor_can_help_with_a_skill_need_without_naming_a_role(client, f, db):
+    """The screens offer Participant or Contributor only (no Trainer): a contributor may
+    offer to teach (a skill need), and the role defaults to contributor when not sent."""
+    p = f.project(f.user(UserRole.organizer, "Org"))
+    n = f.need(p, NeedType.skill, 1, "trainer")
+    n.slot_start = datetime.now(UTC) + timedelta(days=3)
+    n.slot_end = n.slot_start + timedelta(hours=2)
+    db.flush()
+    user = f.user(UserRole.general, "Helper")
+    r = client.post(f"/api/events/{p.id}/join", json={"role": "contributor", "need_id": str(n.id)}, headers=auth(user))
+    assert r.status_code == 204, r.text
+    m = db.scalar(select(EventMembership).where(EventMembership.user_id == user.id))
+    assert db.get(Offer, m.offer_id).contribution_role.value == "contributor"
+    # Without a need it is still refused
+    other = f.user(UserRole.general, "Other")
+    assert client.post(f"/api/events/{p.id}/join", json={"role": "contributor"}, headers=auth(other)).status_code == 422
