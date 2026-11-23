@@ -77,18 +77,6 @@ export function useRestoreComment() {
   })
 }
 
-export function useRestoreComment() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: adminApi.restoreComment,
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: aqk.comments })
-      void qc.invalidateQueries({ queryKey: ['user', 'feed'] })
-      void qc.invalidateQueries({ queryKey: ['user', 'program'] })
-    },
-  })
-}
-
 /** Runs an admin action, then refreshes every admin list. */
 export function useAdminAction<TVars, TOut = unknown>(fn: (vars: TVars) => Promise<TOut>) {
   const qc = useQueryClient()
