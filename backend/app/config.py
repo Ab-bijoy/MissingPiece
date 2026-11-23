@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     jobs_secret: str = "dev-jobs-secret"
 
+    # false in production: hides /docs, /redoc and /openapi.json
+    show_api_docs: bool = True
+
     @field_validator("database_url", "test_database_url")
     @classmethod
     def use_psycopg3(cls, v: str | None) -> str | None:
