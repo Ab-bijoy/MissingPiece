@@ -16,7 +16,10 @@ export type AuthService = {
   resendOtp(email: string): Promise<void>
   signIn(email: string, password: string, remember: boolean): Promise<void>
   signOut(): Promise<void>
+  /** Emails a link that opens /reset-password, signed in just enough to set a new password. */
   resetPassword(email: string): Promise<void>
+  /** Sets a new password for the signed-in user (after opening the reset link). */
+  updatePassword(password: string): Promise<void>
   getAccessToken(): Promise<string | null>
   /** Calls back when the session starts or ends. Returns an unsubscribe function. */
   onChange(cb: (signedIn: boolean) => void): () => void
@@ -29,8 +32,13 @@ function friendly(message: string): string {
   if (m.includes('email not confirmed')) return 'Please confirm your email with the 6-digit code first.'
   if (m.includes('expired') || m.includes('invalid') && m.includes('token'))
     return 'That code is wrong or has expired. Check it, or ask for a new one.'
-  if (m.includes('already registered')) return 'An account with this email already exists. Try logging in.'
+  if (m.includes('already registered')) return 'This email is already in use.'
   if (m.includes('rate limit') || m.includes('security purposes')) return 'Please wait a moment before trying again.'
+  if (m.includes('should be different')) return 'Your new password must be different from your old one.'
+  if (m.includes('weak') || (m.includes('password') && m.includes('at least')))
+    return 'This password is too weak. Use at least 8 characters with uppercase and lowercase letters and a number.'
+  if (m.includes('session') && (m.includes('missing') || m.includes('not found')))
+    return 'This reset link has expired. Ask for a new one.'
   return message
 }
 
@@ -93,8 +101,13 @@ function supabaseAuth(auth: GoTrueClient): AuthService {
     },
     async resetPassword(email) {
       const { error } = await auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`,
+        // Must be in Supabase's Redirect URLs list (Authentication > URL Configuration)
+        redirectTo: `${window.location.origin}/reset-password`,
       })
+      check(error)
+    },
+    async updatePassword(password) {
+      const { error } = await auth.updateUser({ password })
       check(error)
     },
     async getAccessToken() {

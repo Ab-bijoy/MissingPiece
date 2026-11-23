@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { refreshAfter, setProfile, useMyProfile, userApi, useUserAction } from '../../api/user'
 import type { MyProfile } from '../../api/types'
 import Notice from '../../components/ui/Notice'
+import { ageProblem, digitsOnly } from '../../lib/validate'
 import { card, ubtn } from './bits'
 import { useLargeText } from './UserLayout'
 
@@ -22,8 +23,9 @@ export default function UserProfilePage() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
-    if (form.age && !(/^\d+$/.test(form.age) && Number(form.age) <= 130)) {
-      setAgeError('Please enter your age as a number.')
+    const ageErr = ageProblem(form.age)
+    if (ageErr) {
+      setAgeError(ageErr)
       return
     }
     setAgeError(null)
@@ -53,7 +55,7 @@ export default function UserProfilePage() {
             Your age
             <input
               value={form.age}
-              onChange={(e) => setForm({ ...form, age: e.target.value })}
+              onChange={(e) => setForm({ ...form, age: digitsOnly(e.target.value, 3) })}
               inputMode="numeric"
               aria-invalid={ageError ? true : undefined}
               className="mt-1.5 block min-h-13 w-full max-w-40 rounded-xl border border-black/20 px-4 font-normal"

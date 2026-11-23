@@ -85,6 +85,15 @@ export const mockAuth: AuthService = {
   async resetPassword() {
     await wait()
   },
+  async updatePassword(password) {
+    await wait()
+    const id = readSession()
+    const acc = id ? mockDb.bySupabaseId(id) : undefined
+    if (!acc) throw new Error('This reset link has expired. Ask for a new one.')
+    if (acc.password === password) throw new Error('Your new password must be different from your old one.')
+    acc.password = password
+    mockDb.save()
+  },
   async getAccessToken() {
     const id = readSession()
     return id ? `mock.${id}` : null

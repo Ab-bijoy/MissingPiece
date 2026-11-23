@@ -2,9 +2,10 @@
 
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
-from app.schemas.common import Schema
+from app.models.enums import UserRole
+from app.schemas.common import AGE_MAX, AGE_MIN, Schema
 
 
 class OrganizerProfileOut(Schema):
@@ -40,6 +41,13 @@ class MeOut(Schema):
     profile: OrganizerProfileOut | SponsorProfileShort | None
 
 
+class PasswordResetIn(BaseModel):
+    """POST /auth/password-reset: the email and the log-in screen it was asked from."""
+
+    email: EmailStr = Field(max_length=254)
+    role: UserRole
+
+
 class RegisterUserIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    age: int | None = Field(default=None, ge=0, le=130)
+    age: int | None = Field(default=None, ge=AGE_MIN, le=AGE_MAX)

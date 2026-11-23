@@ -453,6 +453,19 @@ def payout(payment_id: uuid.UUID, _: Admin, db: DB):
     return _payment_out(db, pay)
 
 
+@router.post("/admin/payments/{payment_id}/refunded", response_model=AdminPaymentOut)
+def refunded(payment_id: uuid.UUID, _: Admin, db: DB):
+    """Only from refund_due; the money itself is sent back by hand (like payouts)."""
+    pay = db.scalar(select(Payment).where(Payment.id == payment_id).with_for_update())
+    if pay is None:
+        raise not_found("Payment")
+    if pay.status != PaymentStatus.refund_due:
+        raise ApiError(409, "Only a payment waiting for a refund can be marked refunded.", "bad_status")
+    pay.status = PaymentStatus.refunded
+    db.commit()
+    return _payment_out(db, pay)
+
+
 # ---- Hidden comments ---------------------------------------------------------------------------
 
 

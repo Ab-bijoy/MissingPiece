@@ -25,6 +25,7 @@ const SignupBusinessPage = page(() => import('./pages/public/auth/SignupBusiness
 const VerifyEmailPage = page(() => import('./pages/public/auth/VerifyEmailPage'))
 const RegistrationSentPage = page(() => import('./pages/public/auth/RegistrationSentPage'))
 const ForgotPasswordPage = page(() => import('./pages/public/auth/ForgotPasswordPage'))
+const ResetPasswordPage = page(() => import('./pages/public/auth/ResetPasswordPage'))
 const ComingSoon = page(() => import('./pages/public/ComingSoon'))
 
 // General user area
@@ -90,6 +91,8 @@ export default function App() {
       <Route path="/registration-sent" element={<RegistrationSentPage />} />
       <Route path="/admin/login" element={<LoginPage role="admin" />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      {/* The link in the reset email opens this page (all roles) */}
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Signed-in areas, each behind its role guard */}
       {/* General user area (build prompt 9.1; the feed is at /home, not /) */}

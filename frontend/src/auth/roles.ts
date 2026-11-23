@@ -44,10 +44,7 @@ export function statusMessage(status: AccountStatus, note?: string | null): stri
 
 /** Why this account cannot use a given log-in screen, or null if it can. */
 export function loginProblem(me: Me, screen: UserRole): string | null {
-  if (me.role !== screen) {
-    return `This is the ${ROLE_LABEL[screen].toLowerCase()} log in, but your account is ${
-      me.role === 'general' ? 'a general user account' : `an ${ROLE_LABEL[me.role].toLowerCase()} account`
-    }. Please use the right log-in screen.`
-  }
+  // An account of another role is treated as not registered here: no hint about what it is.
+  if (me.role !== screen) return 'This email is not registered.'
   return statusMessage(me.status, me.rejection_note)
 }

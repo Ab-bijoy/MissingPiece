@@ -35,6 +35,8 @@ export async function mockFetch(url: string, init: RequestInit): Promise<Respons
   const account = auth.startsWith('Bearer mock.') ? mockDb.bySupabaseId(auth.slice('Bearer mock.'.length)) : undefined
 
   if (path === '/health') return json(200, { status: 'ok' })
+  // Forgot password needs no log-in. Demo mode sends no email; the answer is always the same.
+  if (path === '/auth/password-reset' && method === 'POST') return json(202, { status: 'accepted' })
   if (!account) return err(401, 'Please log in again.', 'unauthenticated')
 
   // ---- Auth and registration (7.1) ----

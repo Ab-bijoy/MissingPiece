@@ -13,7 +13,20 @@ from app.services.notifications import notify
 
 def withdraw(db: Session, user: AppUser, offer_id: uuid.UUID) -> None:
     """Rule 7: allowed while offered or accepted, never after received.
-    Withdrawing an accepted offer reopens the need and deletes the booking."""
+    Withdrawing an accepted offer reopens the need and deletes the booking.
+    Not while a payment for the offer is in progress: the money could still arrive."""
+    from app.services.payments import payment_in_progress  # payments imports this module's neighbours
+
+    found = db.get(Offer, offer_id)
+    if found is not None and found.from_user_id == user.id and found.stage == OfferStage.accepted:
+        if payment_in_progress(db, found) is not None:  # may also settle a finished payment
+            raise ApiError(
+                409,
+                "Your payment for this offer is still in progress, so it cannot be withdrawn now. "
+                "If you closed the payment page, try again in 15 minutes.",
+                "payment_in_progress",
+            )
+        db.expire_all()
     o = db.scalar(select(Offer).where(Offer.id == offer_id).with_for_update())
     if o is None:
         raise not_found("Offer")

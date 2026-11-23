@@ -1,6 +1,6 @@
 import { CircleCheck } from 'lucide-react'
 import type { FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { sponsorApi, usePaymentQuote, useSponsorAction } from '../../api/sponsor'
 import { Card, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
@@ -26,6 +26,34 @@ export default function SponsorPay() {
       </main>
     )
 
+  // Already paid: nothing to pay
+  if (q.offer_stage === 'received')
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+        <Notice tone="success">
+          <strong>Paid, thank you.</strong> Your {bdt(q.amount)} for the {q.project_name} {q.need_title.toLowerCase()} went through.
+        </Notice>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link to={`/sponsor/reports/${q.project_id}`} className={smallBtn.primary}>
+            See the impact report
+          </Link>
+          <Link to="/sponsor/offers" className={smallBtn.secondary}>
+            Back to my offers
+          </Link>
+        </div>
+      </main>
+    )
+  if (q.offer_stage !== 'accepted')
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+        <Notice tone="info">This offer is no longer waiting for a payment.</Notice>
+        <Link to="/sponsor/offers" className={`${smallBtn.secondary} mt-4`}>
+          Back to my offers
+        </Link>
+      </main>
+    )
+  const inProgress = q.payment_in_progress
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
     pay.mutate(undefined, {
@@ -42,7 +70,12 @@ export default function SponsorPay() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      {q.last_payment_status === 'failed' ? (
+      {inProgress ? (
+        <Notice tone="warning">
+          You already started paying for this offer. Finish on the payment page, or continue below. If you closed the payment
+          page, you can start again after 15 minutes. You will never be charged twice.
+        </Notice>
+      ) : q.last_payment_status === 'failed' ? (
         <Notice tone="warning">Your last payment did not go through. Your offer is still accepted, so you can try again.</Notice>
       ) : (
         <div className="flex gap-3 rounded-[14px] border border-[#BFDCD4] bg-[#E6F1EE] px-5 py-4">
@@ -77,7 +110,7 @@ export default function SponsorPay() {
           <form onSubmit={submit} className="flex flex-col gap-4">
             {pay.isError && <Notice tone="error">{pay.error instanceof Error ? pay.error.message : 'Could not start the payment.'}</Notice>}
             <button type="submit" className={`${smallBtn.primary} min-h-14 text-lg`} disabled={pay.isPending}>
-              {pay.isPending ? 'Opening payment…' : `Pay ${bdt(q.total)}`}
+              {pay.isPending ? 'Opening payment…' : inProgress ? 'Continue payment' : `Pay ${bdt(q.total)}`}
             </button>
             <p className="text-[15px] text-ink-soft">
               You will go to the payment provider's secure page, where you can pay by card, mobile wallet or internet banking. Once
@@ -86,6 +119,7 @@ export default function SponsorPay() {
           </form>
         </Card>
 
+        {!inProgress && (
         <button
           type="button"
           className="w-fit min-h-11 font-bold text-warning underline underline-offset-2"
@@ -97,6 +131,7 @@ export default function SponsorPay() {
         >
           Withdraw this offer instead
         </button>
+        )}
         {withdraw.isError && <Notice tone="error">{withdraw.error instanceof Error ? withdraw.error.message : 'Could not withdraw.'}</Notice>}
       </div>
     </main>

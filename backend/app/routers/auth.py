@@ -8,7 +8,7 @@ verified, and tell the front end who is logged in.
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,9 @@ from app.auth import DB, Claims, CurrentUser, current_user_optional, token_claim
 from app.errors import ApiError
 from app.models import AppUser, OrganizerProfile, RegistrationDocument, SponsorProfile
 from app.models.enums import AccountStatus, DocumentKind, OrgType, UserRole
-from app.schemas.auth import MeOut, OrganizerProfileOut, RegisterUserIn, SponsorProfileShort
+from app.schemas.auth import MeOut, OrganizerProfileOut, PasswordResetIn, RegisterUserIn, SponsorProfileShort
+from app.schemas.common import clean_phone
+from app.services.password_reset import send_supabase_reset, should_send
 from app.services.storage import storage
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -47,6 +49,17 @@ def me_out(db: Session, u: AppUser) -> MeOut:
     )
 
 
+@router.post("/password-reset", status_code=status.HTTP_202_ACCEPTED)
+def password_reset(body: PasswordResetIn, db: DB, background: BackgroundTasks) -> dict[str, str]:
+    """Forgot password. No log-in needed. The reset email goes out only if the email
+    belongs to an account of the given role (the log-in screen it was asked from).
+    The answer is always the same, so it does not reveal which emails have accounts."""
+    if should_send(db, str(body.email), body.role):
+        # Supabase is called after the answer, so it takes the same time either way.
+        background.add_task(send_supabase_reset, str(body.email).strip().lower())
+    return {"status": "accepted"}
+
+
 @router.get("/me", response_model=MeOut)
 def me(user: CurrentUser, db: DB):
     """Any token. 404 `no_profile` means: email verified, but no profile yet (finish signing up)."""
@@ -66,7 +79,7 @@ def _check_new(db: Session, claims: Claims, existing: AppUser | None) -> str:
     if not email:
         raise ApiError(422, "Your log-in has no email address.", "validation")
     if db.scalar(select(AppUser.id).where(AppUser.email == email)):
-        raise ApiError(409, "Another account already uses this email.", "email_taken")
+        raise ApiError(409, "This email is already in use.", "email_taken")
     return email
 
 
@@ -121,6 +134,13 @@ def _clean(value: str, field: str, max_len: int) -> str:
     return v[:max_len]
 
 
+def _phone(value: str) -> str:
+    try:
+        return clean_phone(value)
+    except ValueError as e:
+        raise ApiError(422, str(e), "validation") from None
+
+
 @router.post("/register/organizer", response_model=MeOut, status_code=status.HTTP_201_CREATED)
 async def register_organizer(
     claims: Claimed,
@@ -152,7 +172,7 @@ async def register_organizer(
             org_type=org_type,
             registration_number=_clean(registration_number, "the registration number", 100),
             contact_person=_clean(contact_person, "the contact person", 200),
-            phone=_clean(phone, "the phone number", 40),
+            phone=_phone(phone),
         )
     )
     _store(db, u, proof, data, ctype, DocumentKind.registration_proof)
@@ -191,7 +211,7 @@ async def register_sponsor(
             industry=_clean(industry, "the industry", 120),
             trade_license_number=_clean(trade_license_number, "the trade licence number", 100),
             contact_person=_clean(contact_person, "the contact person", 200),
-            phone=_clean(phone, "the phone number", 40),
+            phone=_phone(phone),
         )
     )
     _store(db, u, trade_license, data, ctype, DocumentKind.trade_license)

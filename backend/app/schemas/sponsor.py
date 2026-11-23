@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import NeedType
-from app.schemas.common import BenefitOut, EventFacts, NeedOut, Num, OfferOut, Schema
+from app.schemas.common import BenefitOut, EventFacts, NeedOut, Num, OfferOut, Schema, clean_phone
 
 RequestState = Literal["new", "offer_sent", "accepted", "received", "covered_by_other", "withdrawn", "expired"]
 
@@ -71,6 +71,10 @@ class PaymentQuote(Schema):
     commission: Num
     total: Num
     last_payment_status: str | None
+    offer_stage: str
+    project_id: uuid.UUID
+    # A payment was started in the last 15 minutes and has no answer yet
+    payment_in_progress: bool = False
 
 
 class PaymentIn(BaseModel):
@@ -124,11 +128,16 @@ class SponsorProfileIn(BaseModel):
     company: str | None = Field(default=None, min_length=1, max_length=200)
     industry: str | None = Field(default=None, min_length=1, max_length=120)
     contact_person: str | None = Field(default=None, min_length=1, max_length=200)
-    phone: str | None = Field(default=None, min_length=5, max_length=40)
+    phone: str | None = Field(default=None, max_length=40)
     interests: list[str] | None = Field(default=None, max_length=30)
     preferred_types: list[NeedType] | None = None
     location: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("phone")
+    @classmethod
+    def check_phone(cls, v: str | None) -> str | None:
+        return None if v is None else clean_phone(v)
 
     @field_validator("interests")
     @classmethod

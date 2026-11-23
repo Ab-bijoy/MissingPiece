@@ -5,7 +5,9 @@ import { useAuth } from '../../../auth/AuthProvider'
 import { resumeSignup } from '../../../auth/resumeSignup'
 import { pendingSignup } from '../../../auth/pendingSignup'
 import { TextField } from '../../../components/ui/Field'
+import NewPasswordFields, { validateNewPassword } from '../../../components/ui/NewPasswordFields'
 import Notice from '../../../components/ui/Notice'
+import { AGE_MAX, AGE_MIN, ageProblem, digitsOnly } from '../../../lib/validate'
 import { btn } from '../../../components/ui/buttons'
 import AuthLayout, { AuthHeading } from './AuthLayout'
 
@@ -20,6 +22,7 @@ export default function SignupUserPage() {
   const [email, setEmail] = useState(start?.email ?? '')
   const [age, setAge] = useState(start?.age != null ? String(start.age) : '')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -28,8 +31,10 @@ export default function SignupUserPage() {
     const e: Record<string, string> = {}
     if (!name.trim()) e.name = 'Please enter your full name.'
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) e.email = 'Please enter a valid email address.'
-    if (age && !(/^\d+$/.test(age) && Number(age) <= 130)) e.age = 'Please enter your age as a number.'
-    if (password.length < 8) e.password = 'Use at least 8 characters.'
+    const ageErr = ageProblem(age)
+    if (ageErr) e.age = ageErr
+    // A weak password is not accepted (the same rules Supabase enforces)
+    Object.assign(e, validateNewPassword(password, confirm, [email, name]) ?? {})
     setErrors(e)
     return Object.keys(e).length === 0
   }
@@ -78,18 +83,17 @@ export default function SignupUserPage() {
           label="Age"
           inputMode="numeric"
           value={age}
-          onChange={(e) => setAge(e.target.value)}
+          onChange={(e) => setAge(digitsOnly(e.target.value, 3))}
           error={errors.age}
-          hint="Only you and organizers of events you join can see it."
+          hint={`${AGE_MIN} to ${AGE_MAX}. Only you and organizers of events you join can see it.`}
         />
-        <TextField
-          label="Password"
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={errors.password}
-          hint="At least 8 characters."
+        <NewPasswordFields
+          password={password}
+          confirm={confirm}
+          onPassword={setPassword}
+          onConfirm={setConfirm}
+          personal={[email, name]}
+          errors={{ password: errors.password, confirm: errors.confirm }}
         />
         <button type="submit" className={btn.primary} disabled={busy}>
           {busy ? 'Creating account…' : 'Create account'}
