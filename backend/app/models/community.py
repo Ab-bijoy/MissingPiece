@@ -23,6 +23,7 @@ class EventMembership(IdMixin, TimestampMixin, Base):
     __tablename__ = "event_membership"
     __table_args__ = (
         UniqueConstraint("user_id", "project_id"),
+        Index("ix_membership_project_status_role", "project_id", "status", "role"),
         # Participants are approved on joining; only contributors wait (rule 14).
         CheckConstraint("role <> 'participant' OR status = 'approved'", name="participant_approved"),
     )
@@ -39,6 +40,7 @@ class Comment(IdMixin, TimestampMixin, Base):
 
     __tablename__ = "comment"
     __table_args__ = (
+        Index("ix_comment_project_status_created", "project_id", "status", "created_at"),
         CheckConstraint("kind <> 'reply' OR parent_id IS NOT NULL", name="reply_has_parent"),
         CheckConstraint("length(btrim(body)) > 0", name="body_not_blank"),
     )

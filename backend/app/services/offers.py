@@ -6,8 +6,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError, forbidden, must, not_found
-from app.models import AppUser, Booking, Need, Offer, Project
-from app.models.enums import NeedStatus, NotificationType, OfferStage
+from app.models import AppUser, Booking, EventMembership, Need, Offer, Project
+from app.models.enums import MembershipStatus, NeedStatus, NotificationType, OfferStage
 from app.services.notifications import notify
 
 
@@ -29,6 +29,9 @@ def withdraw(db: Session, user: AppUser, offer_id: uuid.UUID) -> None:
         need.status = NeedStatus.open
         db.execute(delete(Booking).where(Booking.offer_id == o.id))
     o.stage = OfferStage.withdrawn
+    membership = db.scalar(select(EventMembership).where(EventMembership.offer_id == o.id))
+    if membership:
+        membership.status = MembershipStatus.rejected
 
     project = must(db.get(Project, need.project_id), "Project")
     notify(

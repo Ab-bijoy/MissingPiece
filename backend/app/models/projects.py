@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, Date, DateTime, Integer, Numeric, String, Text, text
+from sqlalchemy import CheckConstraint, Date, DateTime, Index, Integer, Numeric, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,7 +29,10 @@ class Template(IdMixin, TimestampMixin, Base):
 
 class Project(IdMixin, TimestampMixin, Base):
     __tablename__ = "project"
-    __table_args__ = (CheckConstraint("audience >= 0", name="audience_not_negative"),)
+    __table_args__ = (
+        CheckConstraint("audience >= 0", name="audience_not_negative"),
+        Index("ix_project_status_created", "status", "created_at"),
+    )
 
     organizer_id: Mapped[uuid.UUID] = fk("app_user.id")
     template_id: Mapped[uuid.UUID | None] = fk("template.id", ondelete="SET NULL", nullable=True)

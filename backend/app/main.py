@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.db import wait_for_database
 from app.errors import install_error_handlers
-from app.routers import admin, auth, events, payments, shared, sponsor
+from app.routers import admin, auth, community, events, jobs, payments, shared, sponsor
 
 
 @asynccontextmanager
@@ -36,6 +36,8 @@ def create_app() -> FastAPI:
 
     # Routers are added as each module is built (sponsor first).
     app.include_router(auth.router)
+    app.include_router(community.router)
+    app.include_router(jobs.router)
     app.include_router(sponsor.router)
     app.include_router(events.router)
     app.include_router(payments.router)

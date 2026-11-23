@@ -153,7 +153,7 @@ function About({ p }: { p: ProgramDetail }) {
 }
 
 function Discussion({ p }: { p: ProgramDetail }) {
-  const { data: comments } = useProgramComments(p.id)
+  const { data: comments, isPending: commentsLoading, error: commentsError } = useProgramComments(p.id)
   const [text, setText] = useState('')
   const [replyTo, setReplyTo] = useState<Comment | null>(null)
   const post = useUserAction(() =>
@@ -206,15 +206,17 @@ function Discussion({ p }: { p: ProgramDetail }) {
         </div>
         {post.isError && <Notice tone="error">{post.error instanceof Error ? post.error.message : 'Could not post.'}</Notice>}
       </form>
+      {commentsLoading && <p className="mt-4">Loading comments…</p>}
+      {commentsError && <Notice tone="error">{commentsError.message}</Notice>}
       <ul className="mt-5 flex flex-col gap-5">
-        {top.length === 0 && <li className="text-ink-soft">No comments yet. Be the first to ask.</li>}
+        {!commentsLoading && !commentsError && top.length === 0 && <li className="text-ink-soft">No comments yet. Be the first to ask.</li>}
         {top.map((c) => (
           <li key={c.id} className="flex flex-col gap-3">
             <div>
               <CommentBubble name={c.author_name} body={c.body} />
               <p className="mt-1 pl-13 text-sm text-ink-soft">
                 {timeAgo(c.created_at)}
-                {c.status === 'hidden' && ' · hidden by the organizer (only you can see it)'} ·{' '}
+                {c.status === 'hidden' && ' · hidden by the organizer (visible to you, the organizer and admins)'} ·{' '}
                 <button
                   type="button"
                   className="min-h-11 font-semibold text-user-accent"
@@ -228,7 +230,7 @@ function Discussion({ p }: { p: ProgramDetail }) {
               </p>
             </div>
             {repliesOf(c.id).map((r) => (
-              <CommentBubble key={r.id} name={r.author_name} body={r.body} organizer={r.author_name === p.organizer_name} indent />
+              <CommentBubble key={r.id} name={r.author_name} body={r.body} organizer={r.is_organizer === true} indent />
             ))}
           </li>
         ))}
@@ -282,10 +284,12 @@ function Contribute({ p }: { p: ProgramDetail }) {
   const options = p.needs.filter((n) => n.state === 'open' && ['skill', 'time', 'equipment', 'space'].includes(n.type))
   const [role, setRole] = useState<ContributionRole>(options.some((n) => n.type === 'skill') ? 'trainer' : 'contributor')
   const [needId, setNeedId] = useState('')
+  const eligible = options.filter((n) => role !== 'trainer' || n.type === 'skill')
+  const selected = eligible.find((n) => n.id === needId) ?? eligible[0]
   const join = useUserAction(() =>
-    userApi.join(p.id, { role: 'contributor', contribution_role: role, need_id: needId || options[0]!.id }),
+    userApi.join(p.id, { role: 'contributor', contribution_role: role, need_id: selected!.id }),
   )
-  const label = role === 'trainer' ? 'Contribute as trainer' : 'Join as contributor'
+  const label = role === 'trainer' ? 'Apply as trainer' : 'Apply as contributor'
 
   return (
     <section id="contribute" className={`${card} scroll-mt-36`}>
@@ -313,14 +317,14 @@ function Contribute({ p }: { p: ProgramDetail }) {
           <label className="font-semibold">
             Contribution role
             <select value={role} onChange={(e) => setRole(e.target.value as ContributionRole)} className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal">
-              <option value="trainer">Trainer</option>
+              <option value="trainer" disabled={!options.some((n) => n.type === 'skill')}>Trainer</option>
               <option value="contributor">Contributor</option>
             </select>
           </label>
           <label className="font-semibold">
             What you can help with
-            <select value={needId || options[0]!.id} onChange={(e) => setNeedId(e.target.value)} className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal">
-              {options.map((n) => (
+            <select value={selected?.id ?? ''} onChange={(e) => setNeedId(e.target.value)} className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal">
+              {eligible.map((n) => (
                 <option key={n.id} value={n.id}>
                   {n.title}
                   {slotText(n.slot_start, n.slot_end) ? `, ${slotText(n.slot_start, n.slot_end)}` : ''}
@@ -329,7 +333,7 @@ function Contribute({ p }: { p: ProgramDetail }) {
             </select>
           </label>
           {join.isError && <Notice tone="error">{join.error instanceof Error ? join.error.message : 'Could not send.'}</Notice>}
-          <button type="submit" className={`${ubtn.primary} min-h-14 text-lg`} disabled={join.isPending}>
+          <button type="submit" className={`${ubtn.primary} min-h-14 text-lg`} disabled={join.isPending || !selected || p.status !== 'live'}>
             {join.isPending ? 'Sending…' : label}
           </button>
           <p className="text-sm text-ink-soft">The organizer checks every contributor before the program.</p>

@@ -10,7 +10,7 @@ const today = () => new Date().toISOString().slice(0, 10)
 
 /** My contributions (prototype "General user B · My contributions"), in plain words. */
 export default function MyContributions() {
-  const { data, isPending } = useMyContributions()
+  const { data, isPending, error } = useMyContributions()
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
   const withdraw = useUserAction((offerId: string) => userApi.withdraw(offerId))
 
@@ -34,6 +34,7 @@ export default function MyContributions() {
         ))}
       </div>
 
+      {error && <Notice tone="error">{error.message}</Notice>}
       {withdraw.isError && (
         <div className="mt-4">
           <Notice tone="error">{withdraw.error instanceof Error ? withdraw.error.message : 'Could not withdraw.'}</Notice>
@@ -42,7 +43,7 @@ export default function MyContributions() {
 
       <div className="mt-5 flex flex-col gap-4">
         {isPending && <p className="text-ink-soft">Loading…</p>}
-        {!isPending && list.length === 0 && (
+        {!isPending && !error && list.length === 0 && (
           <p className={card}>
             {tab === 'upcoming' ? (
               <>
