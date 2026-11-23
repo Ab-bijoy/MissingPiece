@@ -14,8 +14,8 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select, true
+from sqlalchemy.orm import Session, aliased
 
 from app.models import AppUser, Benefit, Comment, EventMembership, Need, Offer, Payment, Project, Template
 from app.models.enums import CommentStatus, MembershipRole, MembershipStatus, OfferStage
@@ -82,34 +82,111 @@ def template_types(db: Session, projects: Iterable[Project]) -> dict[uuid.UUID, 
     return dict(db.execute(select(Template.id, Template.project_type).where(Template.id.in_(ids))).all())
 
 
+def stat_columns() -> list:
+    """Per-program numbers as correlated subqueries, to add to a query on Project.
+
+    Selecting `Project, *stat_columns()` loads the programs and their organizer name,
+    type, member counts and comment count in one round trip.
+    """
+
+    def members(role: MembershipRole):
+        return (
+            select(func.count())
+            .where(
+                EventMembership.project_id == Project.id,
+                EventMembership.status == MembershipStatus.approved,
+                EventMembership.role == role,
+            )
+            .correlate(Project)
+            .scalar_subquery()
+        )
+
+    return [
+        select(AppUser.name)
+        .where(AppUser.id == Project.organizer_id)
+        .correlate(Project)
+        .scalar_subquery()
+        .label("organizer_name"),
+        select(Template.project_type)
+        .where(Template.id == Project.template_id)
+        .correlate(Project)
+        .scalar_subquery()
+        .label("project_type"),
+        members(MembershipRole.participant).label("participants"),
+        members(MembershipRole.contributor).label("contributors"),
+        select(func.count())
+        .where(Comment.project_id == Project.id, Comment.status == CommentStatus.visible)
+        .correlate(Project)
+        .scalar_subquery()
+        .label("comment_count"),
+    ]
+
+
+STAT_KEYS = ("organizer_name", "project_type", "participants", "contributors", "comment_count")
+
+
+def stats_of(row) -> dict:
+    """The numbers from one row of select(Project, *stat_columns())."""
+    return {k: getattr(row, k) for k in STAT_KEYS}
+
+
+def project_stats(db: Session, projects: list[Project]) -> dict[uuid.UUID, dict]:
+    """The same numbers for programs that are already loaded: one query."""
+    if not projects:
+        return {}
+    rows = db.execute(select(Project.id, *stat_columns()).where(Project.id.in_([p.id for p in projects]))).all()
+    return {row.id: stats_of(row) for row in rows}
+
+
 def event_facts_many(
-    db: Session, projects: list[Project], known_names: dict | None = None
+    db: Session, projects: list[Project], known_names: dict | None = None, stats: dict | None = None
 ) -> dict[uuid.UUID, EventFacts]:
-    """EventFacts for every program in 2-3 queries. Pass `known_names` to reuse names already loaded."""
-    pids = [p.id for p in projects]
-    counts = member_counts(db, pids)
-    types = template_types(db, projects)
-    nm = known_names if known_names is not None else {}
-    missing = [p.organizer_id for p in projects if p.organizer_id not in nm]
-    if missing:
-        nm = {**nm, **names(db, missing)}
-    return {p.id: build_facts(p, counts.get(p.id, {}), types, nm) for p in projects}
+    """EventFacts for every program: one query, or none when `stats` is passed in."""
+    stats = stats if stats is not None else project_stats(db, projects)
+    return {p.id: build_facts(p, stats[p.id]) for p in projects}
 
 
-def build_facts(p: Project, counts: dict, types: dict, nm: dict) -> EventFacts:
+def build_facts(p: Project, st: dict) -> EventFacts:
     return EventFacts(
         id=p.id,
         name=p.name,
-        project_type=types.get(p.template_id) if p.template_id else None,
-        organizer_name=nm.get(p.organizer_id, "Someone"),
+        project_type=st["project_type"] if p.template_id else None,
+        organizer_name=st["organizer_name"] or "Someone",
         institution=p.institution,
         event_date=p.event_date,
         venue=p.venue,
         audience=p.audience,
         status=p.status.value,
-        participants=counts.get(MembershipRole.participant, 0),
-        contributors=counts.get(MembershipRole.contributor, 0),
+        participants=st["participants"] or 0,
+        contributors=st["contributors"] or 0,
     )
+
+
+def needs_and_holds(
+    db: Session, project_ids: list[uuid.UUID]
+) -> tuple[dict[uuid.UUID, list[Need]], dict[uuid.UUID, OfferStage]]:
+    """Each program's needs, and the stage of the offer covering each covered need: one query."""
+    needs: dict[uuid.UUID, list[Need]] = defaultdict(list)
+    holds: dict[uuid.UUID, OfferStage] = {}
+    if not project_ids:
+        return needs, holds
+    hold = (
+        select(Offer.stage)
+        .where(Offer.need_id == Need.id, Offer.stage.in_(HOLDING))
+        .order_by(Offer.created_at)
+        .limit(1)
+        .correlate(Need)
+        .scalar_subquery()
+        .label("hold")
+    )
+    rows = db.execute(
+        select(Need, hold).where(Need.project_id.in_(project_ids)).order_by(Need.created_at, Need.id)
+    ).all()
+    for n, stage in rows:
+        needs[n.project_id].append(n)
+        if stage is not None:
+            holds[n.id] = stage
+    return needs, holds
 
 
 def visible_comment_counts(db: Session, project_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
@@ -128,31 +205,36 @@ def my_memberships(db: Session, project_ids: list[uuid.UUID], user: AppUser | No
     """The viewer's membership per program as {"membership": {...} | None, "offer_id": ...}.
 
     A membership whose contribution offer was withdrawn, declined or expired counts
-    as not joined (the person may apply again).
+    as not joined (the person may apply again). One query.
     """
     if user is None or not project_ids:
         return {}
-    rows = db.scalars(
-        select(EventMembership).where(EventMembership.project_id.in_(project_ids), EventMembership.user_id == user.id)
+    rows = db.execute(
+        select(EventMembership, Offer.stage)
+        .outerjoin(Offer, Offer.id == EventMembership.offer_id)
+        .where(EventMembership.project_id.in_(project_ids), EventMembership.user_id == user.id)
     ).all()
-    stages = {}
-    offer_ids = _ids(m.offer_id for m in rows)
-    if offer_ids:
-        stages = dict(db.execute(select(Offer.id, Offer.stage).where(Offer.id.in_(offer_ids))).all())
     out = {}
-    for m in rows:
-        if m.offer_id and stages.get(m.offer_id) in ENDED:
+    for m, stage in rows:
+        if m.offer_id and stage in ENDED:
             continue
         out[m.project_id] = {"membership": {"id": m.id, "role": m.role, "status": m.status}, "offer_id": m.offer_id}
     return out
 
 
 def community_fields_many(
-    db: Session, projects: list[Project], user: AppUser | None, facts: dict[uuid.UUID, EventFacts]
+    db: Session,
+    projects: list[Project],
+    user: AppUser | None,
+    facts: dict[uuid.UUID, EventFacts],
+    stats: dict | None = None,
 ) -> dict[uuid.UUID, dict]:
     pids = [p.id for p in projects]
     mine = my_memberships(db, pids, user)
-    counts = visible_comment_counts(db, pids)
+    if stats is not None:
+        counts = {pid: st["comment_count"] or 0 for pid, st in stats.items()}
+    else:
+        counts = visible_comment_counts(db, pids)
     out = {}
     for p in projects:
         m = mine.get(p.id)
@@ -165,13 +247,15 @@ def community_fields_many(
     return out
 
 
-def comment_previews(db: Session, project_ids: list[uuid.UUID]) -> tuple[list[Comment], dict[uuid.UUID, Comment]]:
-    """The two newest visible top-level comments per program, and the first visible reply to each.
-
-    Two queries for any number of programs (window functions pick the top rows per group).
+def comment_previews(
+    db: Session, project_ids: list[uuid.UUID]
+) -> tuple[list[Comment], dict[uuid.UUID, Comment], dict[uuid.UUID, str]]:
+    """The two newest visible top-level comments per program, the first visible reply to
+    each, and the authors' names. One query for any number of programs: a window
+    function picks the top comments, a lateral join picks each one's first reply.
     """
     if not project_ids:
-        return [], {}
+        return [], {}, {}
     rank = (
         func.row_number()
         .over(partition_by=Comment.project_id, order_by=(Comment.created_at.desc(), Comment.id))
@@ -186,24 +270,37 @@ def comment_previews(db: Session, project_ids: list[uuid.UUID]) -> tuple[list[Co
         )
         .subquery()
     )
-    roots = db.scalars(
-        select(Comment)
+    reply_table = aliased(Comment)
+    first_reply = (
+        select(reply_table)
+        .where(reply_table.parent_id == Comment.id, reply_table.status == CommentStatus.visible)
+        .order_by(reply_table.created_at, reply_table.id)
+        .limit(1)
+        .correlate(Comment)
+        .lateral("first_reply")
+    )
+    Reply = aliased(Comment, first_reply)
+    author = aliased(AppUser)
+    reply_author = aliased(AppUser)
+    rows = db.execute(
+        select(Comment, author.name, Reply, reply_author.name)
         .join(top, top.c.id == Comment.id)
+        .outerjoin(author, author.id == Comment.user_id)
+        .outerjoin(first_reply, true())
+        .outerjoin(reply_author, reply_author.id == first_reply.c.user_id)
         .where(top.c.rank <= 2)
         .order_by(Comment.project_id, top.c.rank)
     ).all()
-    if not roots:
-        return [], {}
-    first = (
-        func.row_number().over(partition_by=Comment.parent_id, order_by=(Comment.created_at, Comment.id)).label("rank")
-    )
-    earliest = (
-        select(Comment.id, first)
-        .where(Comment.parent_id.in_([c.id for c in roots]), Comment.status == CommentStatus.visible)
-        .subquery()
-    )
-    replies = db.scalars(select(Comment).join(earliest, earliest.c.id == Comment.id).where(earliest.c.rank == 1)).all()
-    return list(roots), {r.parent_id: r for r in replies}
+    roots, replies, nm = [], {}, {}
+    for c, name, reply, reply_name in rows:
+        roots.append(c)
+        if name is not None:
+            nm[c.user_id] = name
+        if reply is not None:
+            replies[c.id] = reply
+            if reply_name is not None:
+                nm[reply.user_id] = reply_name
+    return roots, replies, nm
 
 
 def comment_dict(c: Comment, nm: dict[uuid.UUID, str], organizer_id: uuid.UUID) -> dict:

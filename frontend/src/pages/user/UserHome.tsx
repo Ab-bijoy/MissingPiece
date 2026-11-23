@@ -1,10 +1,11 @@
 import { CalendarDays, Heart, HelpingHand, Send, Type } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { addComment, refreshAfter, useFeed, useMyContributions, useMyProfile, userApi, useUserAction } from '../../api/user'
+import { addComment, joinAtOnce, refreshAfter, useFeed, useMyContributions, useMyProfile, usePrefetchProgram, userApi, useUserAction } from '../../api/user'
 import type { FeedItem } from '../../api/types'
 import { useAuth } from '../../auth/AuthProvider'
 import Notice from '../../components/ui/Notice'
+import { SkeletonList } from '../../components/ui/Skeleton'
 import { formatDate, timeAgo } from '../../lib/format'
 import { Avatar, card, Cover, DateBadge, membershipStatus, myStatusPill, ubtn } from './bits'
 import { useLargeText } from './UserLayout'
@@ -20,7 +21,7 @@ export default function UserHome() {
       <main className="flex min-w-0 flex-col gap-5">
         <h1 className="sr-only">Home</h1>
         <AskBox feed={feed ?? []} />
-        {isPending && <p className="text-center text-ink-soft">Loading programs…</p>}
+        {isPending && <SkeletonList count={2} />}
         {isError && <Notice tone="error">{error instanceof Error ? error.message : 'Could not load the feed.'}</Notice>}
         {feed?.length === 0 && <p className={card}>No programs right now. Check back soon.</p>}
         {feed?.map((item) => <Post key={item.id} item={item} />)}
@@ -135,8 +136,14 @@ function AskBox({ feed }: { feed: FeedItem[] }) {
 
 function Post({ item }: { item: FeedItem }) {
   const { me } = useAuth()
+  const ahead = usePrefetchProgram()
   const [text, setText] = useState('')
-  const join = useUserAction(() => userApi.join(item.id, { role: 'participant' }), () => refreshAfter.join(item.id))
+  const join = useUserAction(
+    () => userApi.join(item.id, { role: 'participant' }),
+    () => refreshAfter.join(item.id),
+    undefined,
+    (qc) => joinAtOnce(qc, item.id),
+  )
   const comment = useUserAction(
     () => userApi.postComment(item.id, { kind: 'comment', body: text.trim(), parent_id: null }),
     () => refreshAfter.comment(item.id),
@@ -158,7 +165,7 @@ function Post({ item }: { item: FeedItem }) {
       </div>
       <p className="px-5 pt-3">{item.description}</p>
 
-      <Link to={`/programs/${item.id}`} className="mt-4 block hover:opacity-95">
+      <Link {...ahead(item.id)} to={`/programs/${item.id}`} className="mt-4 block hover:opacity-95">
         <Cover className="h-40" />
         <div className="flex items-center gap-4 bg-[#F6F8F7] px-5 py-4">
           <DateBadge date={item.event_date} />
@@ -179,7 +186,7 @@ function Post({ item }: { item: FeedItem }) {
         {item.my_membership ? (
           <>
             {myStatusPill(item.my_membership)}
-            <Link to={`/programs/${item.id}`} className="text-sm font-semibold text-user-accent underline">
+            <Link {...ahead(item.id)} to={`/programs/${item.id}`} className="text-sm font-semibold text-user-accent underline">
               Open program
             </Link>
           </>
@@ -189,7 +196,7 @@ function Post({ item }: { item: FeedItem }) {
               {item.seats_left <= 0 ? 'Program is full' : join.isPending ? 'Joining…' : 'Join as participant'}
             </button>
             {help.length > 0 && (
-              <Link to={`/programs/${item.id}#contribute`} className={ubtn.soft}>
+              <Link {...ahead(item.id)} to={`/programs/${item.id}#contribute`} className={ubtn.soft}>
                 <HelpingHand className="size-5" aria-hidden /> Offer to help
               </Link>
             )}
@@ -210,7 +217,7 @@ function Post({ item }: { item: FeedItem }) {
           </div>
         )}
         {item.comment_count > 1 && (
-          <Link to={`/programs/${item.id}#discussion`} className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-user-accent">
+          <Link {...ahead(item.id)} to={`/programs/${item.id}#discussion`} className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-user-accent">
             See all {item.comment_count} comments
           </Link>
         )}
@@ -252,6 +259,7 @@ export function CommentBubble({ name, body, organizer, indent }: { name: string;
 
 function RightColumn({ feed }: { feed: FeedItem[] }) {
   const { data: mine } = useMyContributions()
+  const ahead = usePrefetchProgram()
   const { large, setLarge } = useLargeText()
   const upcoming = (mine ?? []).filter((m) => m.project.status === 'live' && m.status !== 'rejected' && m.offer?.stage !== 'withdrawn').slice(0, 3)
   const help = feed.flatMap((f) => f.help_needed.map((h) => ({ ...h, project: f.name, id: f.id }))).slice(0, 4)
@@ -266,7 +274,7 @@ function RightColumn({ feed }: { feed: FeedItem[] }) {
           <ul className="mt-3 flex flex-col gap-3">
             {upcoming.map((m) => (
               <li key={m.membership_id}>
-                <Link to={`/programs/${m.project.id}`} className="flex items-center gap-3 rounded-xl p-1 hover:bg-user-bg">
+                <Link {...ahead(m.project.id)} to={`/programs/${m.project.id}`} className="flex items-center gap-3 rounded-xl p-1 hover:bg-user-bg">
                   <DateBadge date={m.project.event_date} />
                   <span>
                     <span className="block font-semibold">{m.project.name}</span>
@@ -285,7 +293,7 @@ function RightColumn({ feed }: { feed: FeedItem[] }) {
           <ul className="mt-3 flex flex-col gap-2">
             {help.map((h) => (
               <li key={h.need_id}>
-                <Link to={`/programs/${h.id}#contribute`} className="block rounded-xl p-2 hover:bg-user-bg">
+                <Link {...ahead(h.id)} to={`/programs/${h.id}#contribute`} className="block rounded-xl p-2 hover:bg-user-bg">
                   <span className="block font-semibold">{h.title}</span>
                   <span className="text-sm text-ink-soft">
                     {h.text} · {h.project}

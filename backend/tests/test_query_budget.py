@@ -52,6 +52,9 @@ def busy_program(f, db, org, commenter):
 
 
 def queries_for(client, url, headers=None):
+    # Warm up first, so the brief account cache (app/user_cache.py) is in the same state
+    # for every measurement: only the page's own queries are counted.
+    client.get(url, headers=headers or {})
     with count_queries() as seen:
         r = client.get(url, headers=headers or {})
     assert r.status_code == 200, r.text
@@ -76,7 +79,8 @@ def test_feed_and_events_do_not_grow_with_programs(client, f, db):
         "events": queries_for(client, "/api/events?limit=200", auth(sponsor)),
     }
     assert six == one, f"query count grew with more programs: {one} -> {six}"
-    assert six["feed_signed_in"] <= 14 and six["events"] <= 9, six
+    # Merged queries (Nov 2026): feed 3 logged out, 4 signed in; events list 2
+    assert six["feed"] <= 3 and six["feed_signed_in"] <= 4 and six["events"] <= 2, six
 
 
 def test_my_contributions_and_comments_do_not_grow(client, f, db):

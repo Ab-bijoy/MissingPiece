@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { refreshAfter, useMyContributions, userApi, useUserAction } from '../../api/user'
+import { refreshAfter, useMyContributions, usePrefetchProgram, userApi, useUserAction } from '../../api/user'
 import type { MyContribution } from '../../api/types'
 import Notice from '../../components/ui/Notice'
+import { SkeletonList } from '../../components/ui/Skeleton'
 import { slotText } from '../../lib/format'
 import { card, DateBadge, membershipStatus, ubtn } from './bits'
 
@@ -11,6 +12,7 @@ const today = () => new Date().toISOString().slice(0, 10)
 /** My contributions (prototype "General user B · My contributions"), in plain words. */
 export default function MyContributions() {
   const { data, isPending, error } = useMyContributions()
+  const ahead = usePrefetchProgram()
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
   const withdraw = useUserAction((offerId: string) => userApi.withdraw(offerId), refreshAfter.withdraw)
 
@@ -42,7 +44,7 @@ export default function MyContributions() {
       )}
 
       <div className="mt-5 flex flex-col gap-4">
-        {isPending && <p className="text-ink-soft">Loading…</p>}
+        {isPending && <SkeletonList count={3} kind="row" />}
         {!isPending && !error && list.length === 0 && (
           <p className={card}>
             {tab === 'upcoming' ? (
@@ -68,7 +70,7 @@ export default function MyContributions() {
                 <h2 className="mt-2 text-xl font-bold">{m.project.name}</h2>
                 <p className="text-ink-soft">{describe(m)}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Link to={`/programs/${m.project.id}`} className={ubtn.soft}>
+                  <Link {...ahead(m.project.id)} to={`/programs/${m.project.id}`} className={ubtn.soft}>
                     Open program
                   </Link>
                   {canWithdraw && (

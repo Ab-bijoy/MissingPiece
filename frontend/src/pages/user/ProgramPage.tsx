@@ -1,9 +1,10 @@
 import { Check, Clock3, MapPin, MessageCircleQuestion, Users } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { addComment, refreshAfter, useProgram, useProgramComments, userApi, useUserAction } from '../../api/user'
+import { addComment, joinAtOnce, refreshAfter, useProgram, useProgramComments, userApi, useUserAction } from '../../api/user'
 import type { Comment, ContributionRole, ProgramDetail } from '../../api/types'
 import Notice from '../../components/ui/Notice'
+import { SkeletonList } from '../../components/ui/Skeleton'
 import { formatDate, slotText, timeAgo } from '../../lib/format'
 import { card, Cover, DateBadge, membershipStatus, ubtn } from './bits'
 import { CommentBubble } from './UserHome'
@@ -26,7 +27,12 @@ export default function ProgramPage() {
     document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [p, hash])
 
-  if (isPending) return <p className="p-10 text-center text-ink-soft">Loading…</p>
+  if (isPending)
+    return (
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        <SkeletonList count={2} />
+      </main>
+    )
   if (isError)
     return (
       <main className="mx-auto max-w-3xl p-6">
@@ -53,7 +59,12 @@ export default function ProgramPage() {
 }
 
 function Hero({ p }: { p: ProgramDetail }) {
-  const join = useUserAction(() => userApi.join(p.id, { role: 'participant' }), () => refreshAfter.join(p.id))
+  const join = useUserAction(
+    () => userApi.join(p.id, { role: 'participant' }),
+    () => refreshAfter.join(p.id),
+    undefined,
+    (qc) => joinAtOnce(qc, p.id),
+  )
   const day = new Date(`${p.event_date}T12:00:00+06:00`)
     .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TZ })
     .toUpperCase()

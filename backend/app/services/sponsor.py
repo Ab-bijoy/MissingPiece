@@ -1,6 +1,7 @@
 """Sponsor business rules (build prompt 7.4 and section 6)."""
 
 import uuid
+from types import SimpleNamespace
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -109,8 +110,25 @@ def request_state(
 
 
 def inbox(db: Session, sponsor: AppUser, limit: int, offset: int) -> list[SponsorRequestSummary]:
-    rows = db.execute(
-        select(SponsorRequest, Need, Project)
+    # One query: each request with its need, program, my latest offer and the covering offer
+    mine_stage = (
+        select(Offer.stage)
+        .where(Offer.request_id == SponsorRequest.id, Offer.from_user_id == sponsor.id)
+        .order_by(Offer.created_at.desc())
+        .limit(1)
+        .correlate(SponsorRequest)
+        .scalar_subquery()
+    )
+    hold_from = (
+        select(Offer.from_user_id)
+        .where(Offer.need_id == SponsorRequest.need_id, Offer.stage.in_(loaders.HOLDING))
+        .order_by(Offer.created_at)
+        .limit(1)
+        .correlate(SponsorRequest)
+        .scalar_subquery()
+    )
+    found = db.execute(
+        select(SponsorRequest, Need, Project, mine_stage, hold_from)
         .join(Need, Need.id == SponsorRequest.need_id)
         .join(Project, Project.id == SponsorRequest.project_id)
         .where(SponsorRequest.sponsor_id == sponsor.id)
@@ -118,9 +136,10 @@ def inbox(db: Session, sponsor: AppUser, limit: int, offset: int) -> list[Sponso
         .limit(limit)
         .offset(offset)
     ).all()
-    # Two batch queries for the whole page instead of two per request
-    latest = _latest_offers(db, [r.id for r, _, _ in rows], sponsor)
-    holds = loaders.holding_offers(db, (r.need_id for r, _, _ in rows))
+    rows = [(r, n, p) for r, n, p, _, _ in found]
+    # request_state only reads .stage of my offer and .from_user_id of the covering one
+    latest = {r.id: SimpleNamespace(stage=stage) for r, _, _, stage, _ in found if stage is not None}
+    holds = {r.need_id: SimpleNamespace(from_user_id=who) for r, _, _, _, who in found if who is not None}
     return [
         SponsorRequestSummary(
             id=r.id,
@@ -137,21 +156,51 @@ def inbox(db: Session, sponsor: AppUser, limit: int, offset: int) -> list[Sponso
 
 
 def request_detail(db: Session, sponsor: AppUser, request_id: uuid.UUID) -> SponsorRequestDetail:
-    r = _my_request(db, sponsor, request_id)
-    p = must(db.get(Project, r.project_id), "Project")
-    n = must(db.get(Need, r.need_id), "Need")
+    thread = (
+        select(MessageThread.id)
+        .where(MessageThread.request_id == SponsorRequest.id)
+        .correlate(SponsorRequest)
+        .scalar_subquery()
+    )
+    hold_from = (
+        select(Offer.from_user_id)
+        .where(Offer.need_id == SponsorRequest.need_id, Offer.stage.in_(loaders.HOLDING))
+        .order_by(Offer.created_at)
+        .limit(1)
+        .correlate(SponsorRequest)
+        .scalar_subquery()
+    )
+    row = db.execute(
+        select(
+            SponsorRequest,
+            Project,
+            Need,
+            thread.label("thread_id"),
+            hold_from.label("hold_from"),
+            *loaders.stat_columns(),
+        )
+        .join(Project, Project.id == SponsorRequest.project_id)
+        .join(Need, Need.id == SponsorRequest.need_id)
+        .where(SponsorRequest.id == request_id)
+    ).first()
+    if row is None:
+        raise not_found("Request")
+    r, p, n = row[0], row[1], row[2]
+    if r.sponsor_id != sponsor.id:
+        raise forbidden("This request was not sent to you.")
+    thread_id = row.thread_id
+    hold = SimpleNamespace(from_user_id=row.hold_from) if row.hold_from else None
     mine = _latest_offer(db, r, sponsor)
-    thread_id = db.scalar(select(MessageThread.id).where(MessageThread.request_id == r.id))
     return SponsorRequestDetail(
         id=r.id,
-        project=event_facts(db, p),
+        project=loaders.build_facts(p, loaders.stats_of(row)),
         need=NeedOut.model_validate(n),
         benefits=list(r.benefits),
         conditions=r.conditions,
         exclusive_category=r.exclusive_category,
         decide_by=r.decide_by,
         deliver_by=r.deliver_by,
-        state=request_state(db, r, sponsor, p),
+        state=request_state(db, r, sponsor, p, mine=mine, hold=hold),
         thread_id=thread_id,
         my_offer=offer_out(db, mine) if mine else None,
     )

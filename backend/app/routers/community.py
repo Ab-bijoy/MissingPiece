@@ -12,7 +12,9 @@ from app.models import AppUser, Comment, Project
 from app.models.enums import NotificationType, ProjectStatus, UserRole
 from app.schemas.community import CommentIn, JoinIn, ProfileOut, ProfilePatch
 from app.services import community as svc
+from app.services import loaders
 from app.services.notifications import notify
+from app.user_cache import load_user
 
 router = APIRouter(prefix="/api", tags=["community"])
 General = Annotated[AppUser, Depends(require_role(UserRole.general))]
@@ -24,7 +26,7 @@ def optional_viewer(db: DB, authorization: Annotated[str | None, Header()] = Non
     if not authorization.lower().startswith("bearer "):
         raise ApiError(401, "Please log in again.", "unauthenticated")
     claims = decode_token(authorization.split(" ", 1)[1])
-    user = db.scalar(select(AppUser).where(AppUser.supabase_user_id == claims.supabase_user_id))
+    user = load_user(db, claims.supabase_user_id)
     if user is None:
         raise ApiError(403, "Finish registration first.", "no_profile")
     return require_active(user)
@@ -35,14 +37,16 @@ Viewer = Annotated[AppUser | None, Depends(optional_viewer)]
 
 @router.get("/feed")
 def feed(db: DB, user: Viewer, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
-    projects = db.scalars(
-        select(Project)
+    # The programs and their numbers (organizer, counts) in one query
+    rows = db.execute(
+        select(Project, *loaders.stat_columns())
         .where(Project.status == ProjectStatus.live)
         .order_by(Project.created_at.desc(), Project.id)
         .limit(limit)
         .offset(offset)
     ).all()
-    return svc.feed_items(db, projects, user)
+    projects = [row[0] for row in rows]
+    return svc.feed_items(db, projects, user, {row[0].id: loaders.stats_of(row) for row in rows})
 
 
 @router.post("/events/{project_id}/join", status_code=204)

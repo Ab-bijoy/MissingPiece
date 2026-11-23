@@ -49,11 +49,20 @@ def event_facts(db: Session, p: Project) -> EventFacts:
 
 
 def offer_out(db: Session, o: Offer) -> OfferOut:
-    need = must(db.get(Need, o.need_id), "Need")
-    m = db.scalar(select(EventMembership).where(EventMembership.offer_id == o.id))
-    pay_status = db.scalar(
-        select(Payment.status).where(Payment.offer_id == o.id).order_by(Payment.created_at.desc()).limit(1)
-    )
+    need = must(db.get(Need, o.need_id), "Need")  # usually already loaded: no query
+    # One round trip for the membership, the last payment and the sender's name
+    member_id, member_status, pay_status, from_name = db.execute(
+        select(
+            select(EventMembership.id).where(EventMembership.offer_id == o.id).scalar_subquery(),
+            select(EventMembership.status).where(EventMembership.offer_id == o.id).scalar_subquery(),
+            select(Payment.status)
+            .where(Payment.offer_id == o.id)
+            .order_by(Payment.created_at.desc())
+            .limit(1)
+            .scalar_subquery(),
+            select(AppUser.name).where(AppUser.id == o.from_user_id).scalar_subquery(),
+        )
+    ).one()
     benefits = db.scalars(select(Benefit).where(Benefit.offer_id == o.id).order_by(Benefit.created_at)).all()
     return OfferOut(
         id=o.id,
@@ -61,7 +70,7 @@ def offer_out(db: Session, o: Offer) -> OfferOut:
         need_title=need.title,
         need_type=need.type.value,
         from_user_id=o.from_user_id,
-        from_name=name_of(db, o.from_user_id),
+        from_name=from_name or "Someone",
         request_id=o.request_id,
         stage=o.stage.value,
         contribution_role=o.contribution_role.value if o.contribution_role else None,
@@ -71,8 +80,8 @@ def offer_out(db: Session, o: Offer) -> OfferOut:
         slot_start=o.slot_start,
         slot_end=o.slot_end,
         benefits=[BenefitOut.model_validate(b) for b in benefits],
-        membership_id=m.id if m else None,
-        membership_status=m.status.value if m else None,
-        payment_status=pay_status.value if pay_status else None,
+        membership_id=member_id,
+        membership_status=getattr(member_status, "value", member_status),
+        payment_status=getattr(pay_status, "value", pay_status),
         created_at=o.created_at,
     )
