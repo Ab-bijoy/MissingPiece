@@ -1,0 +1,76 @@
+/*
+  MissingPiece design tokens.
+  Brand palette: header #0D6052 + Dopely palette (#E07365, #EBCBA9, #31565A, #508B8B).
+  Role themes from the build prompt (section 9.3) are kept as their own tokens.
+*/
+@theme {
+  /* Brand */
+  --color-brand: #0d6052;
+  --color-brand-dark: #0a4a40;
+  --color-coral: #e07365;
+  --color-coral-dark: #c95a4c;
+  --color-sand: #ebcba9;
+  --color-sand-light: #f6e9da;
+  --color-cream: #fbf6ec;
+  --color-deep: #31565a;
+  --color-teal: #508b8b;
+
+  /* Organizer / sponsor / admin theme */
+  --color-paper: #f6f4ef;
+  --color-ink: #1b1f24;
+  --color-ink-soft: #4a5259;
+  --color-accent: #0e5e52;
+  --color-warning: #a9470a;
+
+  /* General user theme */
+  --color-user-bg: #f0f2f1;
+  --color-user-accent: #14703f;
+
+  /* Type */
+  --font-sans: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Atkinson Hyperlegible', sans-serif;
+  --font-user: 'Inter', system-ui, sans-serif;
+
+  /* Motion */
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-rise: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  --animate-draw: draw 2.6s cubic-bezier(0.45, 0.05, 0.25, 1) both;
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.35em);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
