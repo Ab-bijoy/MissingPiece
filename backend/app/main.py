@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.db import wait_for_database
 from app.errors import install_error_handlers
-from app.routers import admin, auth, events, payments, shared, sponsor
+from app.routers import admin, auth, events, payments, shared, sponsor, organizer
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(payments.router)
     app.include_router(shared.router)
     app.include_router(admin.router)
+    app.include_router(organizer.router)
     return app
 
 
