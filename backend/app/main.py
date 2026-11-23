@@ -1,5 +1,6 @@
 """FastAPI app: CORS, error format and routers. All paths start with /api."""
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -14,6 +15,17 @@ from app.routers import admin, auth, events, payments, shared, sponsor
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     wait_for_database()  # free database tiers sleep when idle
+    # Settings are read once at start: after editing .env, restart the server.
+    s = get_settings()
+    payments_mode = s.payment_provider
+    if s.payment_provider == "sslcommerz":
+        payments_mode += " (sandbox)" if s.sslcommerz_sandbox else " (LIVE, real money)"
+    logging.getLogger("uvicorn.error").info(
+        "Payments: %s | Emails: %s | Test tokens: %s",
+        payments_mode,
+        "SMTP" if s.smtp_enabled else "log only",
+        "on" if s.dev_auth else "off",
+    )
     yield
 
 

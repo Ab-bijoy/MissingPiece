@@ -49,7 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const signOut = useCallback(async () => {
-    await authService.signOut() // onChange then drops the cached data
+    await authService.signOut()
+    // Forget the old account now, without waiting for Supabase's sign-out event.
+    setSignedIn(false)
+    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' })
+    queryClient.setQueryData(['me'], null)
   }, [queryClient])
 
   const value = useMemo<AuthState>(

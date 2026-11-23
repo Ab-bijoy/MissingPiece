@@ -1,6 +1,7 @@
 """Payment gateway callbacks (build prompt 7.6) and the mock gateway page (section 10)."""
 
 import html
+import logging
 import uuid
 from decimal import Decimal, InvalidOperation
 
@@ -16,6 +17,8 @@ from app.models import Need, Offer, Payment, Project
 from app.models.enums import PaymentStatus
 from app.services import payments
 from app.services.views import fmt_number
+
+log = logging.getLogger("app.payments")
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
@@ -107,3 +110,55 @@ def mock_checkout_submit(
     return RedirectResponse(
         f"{get_settings().frontend_url.rstrip('/')}/sponsor/offers?payment={result}", status_code=303
     )
+
+
+# ---- SSLCommerz (PAYMENT_PROVIDER=sslcommerz) ------------------------------------------
+# SSLCommerz posts a form to these addresses. Whatever the form says, the result comes
+# from SSLCommerz's validation API (payments.confirm_sslcommerz), never from the form.
+
+
+def _sslcommerz_only() -> None:
+    if get_settings().payment_provider != "sslcommerz":
+        raise not_found("Page")
+
+
+def _back_to_app(result: str) -> RedirectResponse:
+    return RedirectResponse(
+        f"{get_settings().frontend_url.rstrip('/')}/sponsor/offers?payment={result}", status_code=303
+    )
+
+
+def _browser_return(db: DB, tran_id: str, val_id: str | None) -> RedirectResponse:
+    """The sponsor's browser comes back here from SSLCommerz's page."""
+    _sslcommerz_only()
+    try:
+        pay = payments.confirm_sslcommerz(db, tran_id, val_id)
+    except ApiError as e:
+        log.warning("SSLCommerz return for %s not confirmed: %s", tran_id, e.code)
+        return _back_to_app("failed")
+    if pay.status in (PaymentStatus.succeeded, PaymentStatus.paid_out):
+        return _back_to_app("succeeded")
+    return _back_to_app("failed")
+
+
+@router.post("/sslcommerz/success", include_in_schema=False)
+def sslcommerz_success(db: DB, tran_id: str = Form(max_length=30), val_id: str = Form("", max_length=100)):
+    return _browser_return(db, tran_id, val_id or None)
+
+
+@router.post("/sslcommerz/fail", include_in_schema=False)
+def sslcommerz_fail(db: DB, tran_id: str = Form(max_length=30)):
+    return _browser_return(db, tran_id, None)
+
+
+@router.post("/sslcommerz/cancel", include_in_schema=False)
+def sslcommerz_cancel(db: DB, tran_id: str = Form(max_length=30)):
+    return _browser_return(db, tran_id, None)
+
+
+@router.post("/sslcommerz/ipn", include_in_schema=False)
+def sslcommerz_ipn(db: DB, tran_id: str = Form(max_length=30), val_id: str = Form("", max_length=100)):
+    """Server-to-server notice from SSLCommerz (needs a public backend address)."""
+    _sslcommerz_only()
+    pay = payments.confirm_sslcommerz(db, tran_id, val_id or None)
+    return {"status": pay.status.value}

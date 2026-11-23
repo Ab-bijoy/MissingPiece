@@ -43,3 +43,5 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Starlette's test client will move from httpx to httpx2; harmless until FastAPI switches.
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
