@@ -18,7 +18,7 @@ const content: RoleContent = {
     heroTitle: 'text-coral',
     heroText: 'text-ink',
     eyebrow: 'text-deep',
-    ribbon: '#0D6052',
+    ribbon: '#EBCBA9',
     primaryBtn: 'bg-brand text-sand-light hover:bg-brand-dark',
     secondaryBtn: 'text-brand ring-brand/50 hover:bg-brand/5',
     band: 'bg-brand',

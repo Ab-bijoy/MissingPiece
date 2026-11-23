@@ -3,12 +3,13 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 
 from app.errors import ApiError, must, not_found
 from app.models import Comment, EventMembership, Need, Offer, Project
 from app.models.enums import (
     CommentStatus,
+    MembershipRole,
     MembershipStatus,
     NeedType,
     NotificationType,
@@ -16,8 +17,9 @@ from app.models.enums import (
     ProjectStatus,
     UserRole,
 )
+from app.services import loaders
 from app.services.notifications import notify
-from app.services.views import event_facts, holding_offer, name_of, qty_text
+from app.services.views import holding_offer, qty_text
 
 
 def local_today():
@@ -32,19 +34,8 @@ def public_project(db, project_id):
 
 
 def membership(db, project_id, user):
-    if user is None:
-        return None
-    m = db.scalar(
-        select(EventMembership).where(
-            EventMembership.project_id == project_id,
-            EventMembership.user_id == user.id,
-        )
-    )
-    if m and m.offer_id:
-        offer = db.get(Offer, m.offer_id)
-        if offer and offer.stage in (OfferStage.withdrawn, OfferStage.expired, OfferStage.declined):
-            return None
-    return {"id": m.id, "role": m.role, "status": m.status} if m else None
+    m = loaders.my_memberships(db, [project_id], user).get(project_id)
+    return m["membership"] if m else None
 
 
 def comment_query(p, user):
@@ -56,78 +47,70 @@ def comment_query(p, user):
 
 
 def comment_out(db, c):
-    return {
-        "id": c.id,
-        "project_id": c.project_id,
-        "user_id": c.user_id,
-        "author_name": name_of(db, c.user_id),
-        "is_organizer": c.user_id == db.get(Project, c.project_id).organizer_id,
-        "parent_id": c.parent_id,
-        "kind": c.kind,
-        "body": c.body,
-        "status": c.status,
-        "created_at": c.created_at,
-    }
+    """One comment (after posting). Lists use comments_out, which loads authors together."""
+    p = db.get(Project, c.project_id)  # already in the session: no query
+    return loaders.comment_dict(c, loaders.names(db, [c.user_id]), p.organizer_id)
+
+
+def comments_out(db, p, rows):
+    nm = loaders.names(db, (c.user_id for c in rows))
+    return [loaders.comment_dict(c, nm, p.organizer_id) for c in rows]
 
 
 def community_fields(db, p, user):
-    facts = event_facts(db, p)
-    m = membership(db, p.id, user)
-    offer_id = db.get(EventMembership, m["id"]).offer_id if m else None
-    count = db.scalar(
-        select(func.count())
-        .select_from(Comment)
-        .where(
-            Comment.project_id == p.id,
-            Comment.status == CommentStatus.visible,
-        )
+    """Single-program version, kept for callers that show one program."""
+    facts = loaders.event_facts_many(db, [p])
+    return loaders.community_fields_many(db, [p], user, facts)[p.id]
+
+
+def feed_items(db, projects, user):
+    """The feed page: about 10 queries in total, whatever the number of programs."""
+    if not projects:
+        return []
+    pids = [p.id for p in projects]
+    needs = loaders.needs_by_project(db, pids)
+    holds = loaders.holding_offers(db, (n.id for ns in needs.values() for n in ns))
+    roots, replies = loaders.comment_previews(db, pids)
+    # One name lookup for organizers and comment authors together
+    nm = loaders.names(
+        db, [p.organizer_id for p in projects] + [c.user_id for c in roots] + [r.user_id for r in replies.values()]
     )
-    return {
-        "my_membership": m,
-        "my_offer_id": offer_id,
-        "comment_count": count,
-        "seats_left": max(0, p.audience - facts.participants),
-    }
+    facts = loaders.event_facts_many(db, projects, known_names=nm)
+    community = loaders.community_fields_many(db, projects, user, facts)
+
+    previews_by_project = {pid: [] for pid in pids}
+    organizer_of = {p.id: p.organizer_id for p in projects}
+    for c in roots:
+        org = organizer_of[c.project_id]
+        reply = replies.get(c.id)
+        previews_by_project[c.project_id].append(
+            {**loaders.comment_dict(c, nm, org), "reply": loaders.comment_dict(reply, nm, org) if reply else None}
+        )
+
+    items = []
+    for p in projects:
+        opened = [n for n in needs.get(p.id, []) if n.id not in holds]
+        items.append(
+            {
+                **facts[p.id].model_dump(),
+                **community[p.id],
+                "description": p.description,
+                "posted_at": p.created_at,
+                "still_needed": [f"{qty_text(n)} for {n.title.lower()}" for n in opened],
+                "help_needed": [
+                    {"need_id": n.id, "title": n.title, "text": qty_text(n)}
+                    for n in opened
+                    if n.type in (NeedType.skill, NeedType.time, NeedType.equipment, NeedType.space)
+                ],
+                "comments_preview": previews_by_project[p.id],
+            }
+        )
+    return items
 
 
 def feed_item(db, p, user):
-    needs = db.scalars(select(Need).where(Need.project_id == p.id).order_by(Need.created_at, Need.id)).all()
-    opened = [n for n in needs if holding_offer(db, n.id) is None]
-    comments = db.scalars(
-        select(Comment)
-        .where(
-            Comment.project_id == p.id,
-            Comment.status == CommentStatus.visible,
-            Comment.parent_id.is_(None),
-        )
-        .order_by(Comment.created_at.desc(), Comment.id)
-        .limit(2)
-    ).all()
-    previews = []
-    for c in comments:
-        reply = db.scalar(
-            select(Comment)
-            .where(
-                Comment.parent_id == c.id,
-                Comment.status == CommentStatus.visible,
-            )
-            .order_by(Comment.created_at, Comment.id)
-            .limit(1)
-        )
-        previews.append({**comment_out(db, c), "reply": comment_out(db, reply) if reply else None})
-    return {
-        **event_facts(db, p).model_dump(),
-        **community_fields(db, p, user),
-        "description": p.description,
-        "posted_at": p.created_at,
-        "still_needed": [f"{qty_text(n)} for {n.title.lower()}" for n in opened],
-        "help_needed": [
-            {"need_id": n.id, "title": n.title, "text": qty_text(n)}
-            for n in opened
-            if n.type in (NeedType.skill, NeedType.time, NeedType.equipment, NeedType.space)
-        ],
-        "comments_preview": previews,
-    }
+    """Single-program version of feed_items."""
+    return feed_items(db, [p], user)[0]
 
 
 def join(db, user, project_id, body):
@@ -149,7 +132,7 @@ def join(db, user, project_id, body):
         db.flush()
     offer = None
     if body.role == "participant":
-        if event_facts(db, p).participants >= p.audience:
+        if loaders.member_counts(db, [p.id]).get(p.id, {}).get(MembershipRole.participant, 0) >= p.audience:
             raise ApiError(409, "This program is full.", "full")
     else:
         n = db.scalar(select(Need).where(Need.id == body.need_id, Need.project_id == p.id).with_for_update())
@@ -194,16 +177,25 @@ def join(db, user, project_id, body):
 
 
 def memberships(db, user):
+    """My contributions: 5 queries for any number of memberships."""
     rows = db.scalars(
         select(EventMembership)
         .where(EventMembership.user_id == user.id)
         .order_by(EventMembership.created_at.desc(), EventMembership.id)
     ).all()
+    if not rows:
+        return []
+    projects = {p.id: p for p in db.scalars(select(Project).where(Project.id.in_({m.project_id for m in rows})))}
+    offer_ids = {m.offer_id for m in rows if m.offer_id}
+    offers = {o.id: o for o in db.scalars(select(Offer).where(Offer.id.in_(offer_ids)))} if offer_ids else {}
+    need_ids = {o.need_id for o in offers.values()}
+    needs = {n.id: n for n in db.scalars(select(Need).where(Need.id.in_(need_ids)))} if need_ids else {}
+    nm = loaders.names(db, (p.organizer_id for p in projects.values()))
     result = []
     for m in rows:
-        p = must(db.get(Project, m.project_id))
-        o = db.get(Offer, m.offer_id) if m.offer_id else None
-        n = db.get(Need, o.need_id) if o else None
+        p = must(projects.get(m.project_id))
+        o = offers.get(m.offer_id) if m.offer_id else None
+        n = needs.get(o.need_id) if o else None
         result.append(
             {
                 "membership_id": m.id,
@@ -214,7 +206,7 @@ def memberships(db, user):
                     "name": p.name,
                     "event_date": p.event_date,
                     "venue": p.venue,
-                    "organizer_name": name_of(db, p.organizer_id),
+                    "organizer_name": nm.get(p.organizer_id, "Someone"),
                     "status": p.status,
                 },
                 "offer": {

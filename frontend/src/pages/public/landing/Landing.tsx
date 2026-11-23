@@ -8,10 +8,12 @@ import Hero from './Hero'
 import HowItWorks from './HowItWorks'
 import Intro from './Intro'
 import Showcase from './Showcase'
+import { useScrollReveal } from '../../../lib/useScrollReveal'
 
 /** Main landing page for logged-out visitors. */
 export default function Landing() {
   const { hash } = useLocation()
+  const main = useScrollReveal<HTMLElement>()
 
   // Router links like "/#how-it-works" don't scroll on their own.
   useEffect(() => {
@@ -22,7 +24,7 @@ export default function Landing() {
   return (
     <>
       <PublicHeader hideLogin />
-      <main>
+      <main ref={main} className="landing-sections">
         <Hero />
         <Intro />
         <Showcase />

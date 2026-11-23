@@ -1,6 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type InvalidateQueryFilters, type QueryClient } from '@tanstack/react-query'
 import { api } from './client'
-import { qk as sharedQk } from './organizer'
 import type { Comment, CommentKind, FeedItem, JoinInput, MyContribution, MyProfile, OrganizerProfileView, ProgramDetail } from './types'
 
 // General user calls from build prompt 7.5, plus comments (7.6).
@@ -39,15 +38,52 @@ export const useMyContributions = () => useQuery({ queryKey: uqk.memberships, qu
 export const useMyProfile = () => useQuery({ queryKey: uqk.profile, queryFn: userApi.profile })
 export const useOrgProfile = () => useQuery({ queryKey: uqk.orgProfile, queryFn: userApi.orgProfile })
 
-/** Runs a general-user action, then refreshes the feed, programs, contributions and notifications. */
-export function useUserAction<TVars, TOut = unknown>(fn: (vars: TVars) => Promise<TOut>) {
+/**
+ * What each action changes, so only that is fetched again (each reload is a
+ * round trip to the server). `exact` keeps a program's comments from reloading
+ * when only the program changed. Pages not on screen are just marked stale.
+ */
+const programOnly = (id: string): InvalidateQueryFilters => ({ queryKey: uqk.program(id), exact: true })
+const anyProgram: InvalidateQueryFilters = {
+  predicate: (q) => q.queryKey[0] === 'user' && q.queryKey[1] === 'program' && q.queryKey.length === 3,
+}
+
+export const refreshAfter = {
+  /** Seats, "you joined" and My contributions change */
+  join: (programId: string) => [programOnly(programId), { queryKey: uqk.feed }, { queryKey: uqk.memberships }],
+  /** My contributions and that program's membership change (program id not known here) */
+  withdraw: () => [{ queryKey: uqk.memberships }, { queryKey: uqk.feed }, anyProgram],
+  /** Comment counts and feed previews change; the comment list is updated directly (see addComment) */
+  comment: (programId: string) => [programOnly(programId), { queryKey: uqk.feed }],
+  /** The name in the header comes from /auth/me */
+  profile: () => [{ queryKey: ['me'] }],
+}
+
+/** Put a new comment into the program's comment list straight away, without reloading it. */
+export function addComment(qc: QueryClient, programId: string, c: Comment) {
+  qc.setQueryData<Comment[]>(uqk.comments(programId), (old) => (old ? [...old, c] : old))
+}
+
+/** Put saved profile details into the cache, without reloading the profile. */
+export function setProfile(qc: QueryClient, profile: MyProfile) {
+  qc.setQueryData(uqk.profile, profile)
+}
+
+/**
+ * Runs a general-user action. `refresh` says which data it changed; `onData` can
+ * write the server's answer into the cache so it shows at once.
+ */
+export function useUserAction<TVars, TOut = unknown>(
+  fn: (vars: TVars) => Promise<TOut>,
+  refresh: (vars: TVars) => InvalidateQueryFilters[],
+  onData?: (qc: QueryClient, result: TOut, vars: TVars) => void,
+) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fn,
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: ['user'] })
-      void qc.invalidateQueries({ queryKey: ['me'] })
-      void qc.invalidateQueries({ queryKey: sharedQk.notifications })
+    onSuccess: (result, vars) => onData?.(qc, result, vars),
+    onSettled: (_result, _error, vars) => {
+      for (const filters of refresh(vars)) void qc.invalidateQueries(filters)
     },
   })
 }

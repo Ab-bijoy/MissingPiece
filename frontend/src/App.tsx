@@ -1,44 +1,66 @@
+import { lazy, Suspense, type ComponentType } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import RequireRole from './auth/RequireRole'
 import TestingBar from './components/app/TestingBar'
 import ScrollToTop from './components/ScrollToTop'
-import AdminAccounts from './pages/admin/AdminAccounts'
-import AdminApprovals from './pages/admin/AdminApprovals'
-import AdminComments from './pages/admin/AdminComments'
-import AdminLayout from './pages/admin/AdminLayout'
-import AdminPayments from './pages/admin/AdminPayments'
-import AdminTemplates from './pages/admin/AdminTemplates'
-import CreateProject from './pages/organizer/CreateProject'
-import OrganizerLayout, { OrganizerHome } from './pages/organizer/OrganizerLayout'
-import OrganizerMessages from './pages/organizer/OrganizerMessages'
-import OrganizerProfilePage from './pages/organizer/OrganizerProfilePage'
-import ProjectDashboard from './pages/organizer/ProjectDashboard'
-import ReceiveComplete from './pages/organizer/ReceiveComplete'
-import MockCheckout from './pages/sponsor/MockCheckout'
-import SponsorEvents from './pages/sponsor/SponsorEvents'
-import SponsorInbox from './pages/sponsor/SponsorInbox'
-import SponsorLayout from './pages/sponsor/SponsorLayout'
-import SponsorOffers from './pages/sponsor/SponsorOffers'
-import SponsorPay from './pages/sponsor/SponsorPay'
-import SponsorProfilePage from './pages/sponsor/SponsorProfilePage'
-import SponsorReportPage from './pages/sponsor/SponsorReportPage'
-import ForgotPasswordPage from './pages/public/auth/ForgotPasswordPage'
-import LoginPage from './pages/public/auth/LoginPage'
-import RegistrationSentPage from './pages/public/auth/RegistrationSentPage'
-import SignupBusinessPage from './pages/public/auth/SignupBusinessPage'
-import SignupUserPage from './pages/public/auth/SignupUserPage'
-import VerifyEmailPage from './pages/public/auth/VerifyEmailPage'
-import ComingSoon from './pages/public/ComingSoon'
-import MyContributions from './pages/user/MyContributions'
-import ProgramPage from './pages/user/ProgramPage'
-import ProgramsList from './pages/user/ProgramsList'
-import UserHome from './pages/user/UserHome'
-import UserLayout from './pages/user/UserLayout'
-import UserProfilePage from './pages/user/UserProfilePage'
+import FullPageSpinner from './components/ui/FullPageSpinner'
+// The main landing page is the usual first page, so it ships with the app itself.
 import Landing from './pages/public/landing/Landing'
-import CommunityLanding from './pages/public/roles/CommunityLanding'
-import OrganizersLanding from './pages/public/roles/OrganizersLanding'
-import SponsorsLanding from './pages/public/roles/SponsorsLanding'
+
+// Every other screen is loaded only when someone opens it, so a visitor to the
+// landing page does not download the admin, organizer and sponsor screens.
+// While a screen loads, the previous one stays on screen (React Router uses
+// transitions); the spinner shows only on a first visit with nothing to show yet.
+const page = <P extends object>(load: () => Promise<{ default: ComponentType<P> }>) => lazy(load)
+const named = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
+  lazy(() => load().then((m) => ({ default: m[name] })))
+
+// Public landings, log in and sign up
+const OrganizersLanding = page(() => import('./pages/public/roles/OrganizersLanding'))
+const SponsorsLanding = page(() => import('./pages/public/roles/SponsorsLanding'))
+const CommunityLanding = page(() => import('./pages/public/roles/CommunityLanding'))
+const LoginPage = page(() => import('./pages/public/auth/LoginPage'))
+const SignupUserPage = page(() => import('./pages/public/auth/SignupUserPage'))
+const SignupBusinessPage = page(() => import('./pages/public/auth/SignupBusinessPage'))
+const VerifyEmailPage = page(() => import('./pages/public/auth/VerifyEmailPage'))
+const RegistrationSentPage = page(() => import('./pages/public/auth/RegistrationSentPage'))
+const ForgotPasswordPage = page(() => import('./pages/public/auth/ForgotPasswordPage'))
+const ComingSoon = page(() => import('./pages/public/ComingSoon'))
+
+// General user area
+const UserLayout = page(() => import('./pages/user/UserLayout'))
+const UserHome = page(() => import('./pages/user/UserHome'))
+const ProgramsList = page(() => import('./pages/user/ProgramsList'))
+const ProgramPage = page(() => import('./pages/user/ProgramPage'))
+const MyContributions = page(() => import('./pages/user/MyContributions'))
+const UserProfilePage = page(() => import('./pages/user/UserProfilePage'))
+
+// Organizer area
+const OrganizerLayout = page(() => import('./pages/organizer/OrganizerLayout'))
+const OrganizerHome = named(() => import('./pages/organizer/OrganizerLayout'), 'OrganizerHome')
+const CreateProject = page(() => import('./pages/organizer/CreateProject'))
+const ProjectDashboard = page(() => import('./pages/organizer/ProjectDashboard'))
+const ReceiveComplete = page(() => import('./pages/organizer/ReceiveComplete'))
+const OrganizerMessages = page(() => import('./pages/organizer/OrganizerMessages'))
+const OrganizerProfilePage = page(() => import('./pages/organizer/OrganizerProfilePage'))
+
+// Sponsor area
+const SponsorLayout = page(() => import('./pages/sponsor/SponsorLayout'))
+const SponsorInbox = page(() => import('./pages/sponsor/SponsorInbox'))
+const SponsorEvents = page(() => import('./pages/sponsor/SponsorEvents'))
+const SponsorOffers = page(() => import('./pages/sponsor/SponsorOffers'))
+const SponsorPay = page(() => import('./pages/sponsor/SponsorPay'))
+const SponsorProfilePage = page(() => import('./pages/sponsor/SponsorProfilePage'))
+const SponsorReportPage = page(() => import('./pages/sponsor/SponsorReportPage'))
+const MockCheckout = page(() => import('./pages/sponsor/MockCheckout'))
+
+// Admin area
+const AdminLayout = page(() => import('./pages/admin/AdminLayout'))
+const AdminApprovals = page(() => import('./pages/admin/AdminApprovals'))
+const AdminAccounts = page(() => import('./pages/admin/AdminAccounts'))
+const AdminTemplates = page(() => import('./pages/admin/AdminTemplates'))
+const AdminPayments = page(() => import('./pages/admin/AdminPayments'))
+const AdminComments = page(() => import('./pages/admin/AdminComments'))
 
 // Routes follow the build prompt (section 9.1), with the landing pages in front:
 //   /            main landing        /organizers  organizer landing
@@ -49,6 +71,7 @@ export default function App() {
     <>
     <ScrollToTop />
     <TestingBar />
+    <Suspense fallback={<FullPageSpinner />}>
     <Routes>
       {/* Landing pages */}
       <Route path="/" element={<Landing />} />
@@ -106,6 +129,7 @@ export default function App() {
 
       <Route path="*" element={<ComingSoon title="Page not found" />} />
     </Routes>
+    </Suspense>
     </>
   )
 }

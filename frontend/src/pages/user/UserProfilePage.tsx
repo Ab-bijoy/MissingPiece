@@ -1,6 +1,6 @@
 import { Plus, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
-import { useMyProfile, userApi, useUserAction } from '../../api/user'
+import { refreshAfter, setProfile, useMyProfile, userApi, useUserAction } from '../../api/user'
 import type { MyProfile } from '../../api/types'
 import Notice from '../../components/ui/Notice'
 import { card, ubtn } from './bits'
@@ -12,7 +12,7 @@ export default function UserProfilePage() {
   const { large, setLarge } = useLargeText()
   const [form, setForm] = useState<{ name: string; age: string; skills: string[]; items: string[] } | null>(null)
   const [ageError, setAgeError] = useState<string | null>(null)
-  const save = useUserAction((body: Partial<MyProfile>) => userApi.saveProfile(body))
+  const save = useUserAction((body: Partial<MyProfile>) => userApi.saveProfile(body), refreshAfter.profile, setProfile)
 
   useEffect(() => {
     if (data && !form) setForm({ name: data.name, age: data.age == null ? '' : String(data.age), skills: data.skills, items: data.items })

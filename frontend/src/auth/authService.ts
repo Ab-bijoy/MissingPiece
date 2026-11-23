@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { AuthClient, type GoTrueClient } from '@supabase/auth-js'
 import { env } from '../lib/env'
 import { mockAuth } from '../api/mock/mockAuth'
 import { AccountExistsError } from './AccountExistsError'
@@ -34,13 +34,33 @@ function friendly(message: string): string {
   return message
 }
 
-function supabaseAuth(client: SupabaseClient): AuthService {
+/**
+ * Only Supabase's sign-in part (@supabase/auth-js), not the whole supabase-js
+ * package: the database, storage and realtime parts are never used here (files go
+ * through our API), and leaving them out makes the app's first download smaller.
+ * The settings match what supabase-js uses, including where the session is saved,
+ * so people who were already logged in stay logged in.
+ */
+function createAuthClient(supabaseUrl: string, anonKey: string): GoTrueClient {
+  const base = new URL(supabaseUrl.endsWith('/') ? supabaseUrl : `${supabaseUrl}/`)
+  return new AuthClient({
+    url: new URL('auth/v1', base).href,
+    headers: { Authorization: `Bearer ${anonKey}`, apikey: anonKey },
+    storageKey: `sb-${base.hostname.split('.')[0]}-auth-token`,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'implicit',
+  })
+}
+
+function supabaseAuth(auth: GoTrueClient): AuthService {
   const check = (error: { message: string } | null) => {
     if (error) throw new Error(friendly(error.message))
   }
   return {
     async signUp(email, password) {
-      const { data, error } = await client.auth.signUp({
+      const { data, error } = await auth.signUp({
         email,
         password,
         options: { emailRedirectTo: `${window.location.origin}/login` },
@@ -52,37 +72,37 @@ function supabaseAuth(client: SupabaseClient): AuthService {
       if (data.user && data.user.identities?.length === 0) throw new AccountExistsError()
     },
     async verifyOtp(email, token) {
-      const { error } = await client.auth.verifyOtp({ email, token, type: 'signup' })
+      const { error } = await auth.verifyOtp({ email, token, type: 'signup' })
       check(error)
     },
     async resendOtp(email) {
-      const { error } = await client.auth.resend({ email, type: 'signup' })
+      const { error } = await auth.resend({ email, type: 'signup' })
       check(error)
     },
     async signIn(email, password) {
       // "Keep me logged in": Supabase persists the session by default.
-      const { error } = await client.auth.signInWithPassword({ email, password })
+      const { error } = await auth.signInWithPassword({ email, password })
       check(error)
     },
     async signOut() {
       // 'local' clears this browser's session first, so logging out never depends on the
       // network. (The default 'global' keeps the session when the request to Supabase fails,
       // which left people signed in as the old account.) Supabase still revokes the token.
-      const { error } = await client.auth.signOut({ scope: 'local' })
+      const { error } = await auth.signOut({ scope: 'local' })
       if (error) console.warn('Supabase sign-out request failed; this browser is signed out anyway.', error.message)
     },
     async resetPassword(email) {
-      const { error } = await client.auth.resetPasswordForEmail(email, {
+      const { error } = await auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/login`,
       })
       check(error)
     },
     async getAccessToken() {
-      const { data } = await client.auth.getSession()
+      const { data } = await auth.getSession()
       return data.session?.access_token ?? null
     },
     onChange(cb) {
-      const { data } = client.auth.onAuthStateChange((_event, session) => cb(!!session))
+      const { data } = auth.onAuthStateChange((_event, session) => cb(!!session))
       return () => data.subscription.unsubscribe()
     },
   }
@@ -90,4 +110,4 @@ function supabaseAuth(client: SupabaseClient): AuthService {
 
 export const authService: AuthService = env.useMocks
   ? mockAuth
-  : supabaseAuth(createClient(env.supabaseUrl, env.supabaseAnonKey))
+  : supabaseAuth(createAuthClient(env.supabaseUrl, env.supabaseAnonKey))
