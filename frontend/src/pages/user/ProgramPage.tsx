@@ -5,6 +5,8 @@ import { addComment, refreshAfter, useProgram, useProgramComments, userApi, useU
 import type { Comment, ContributionRole, ProgramDetail } from '../../api/types'
 import Notice from '../../components/ui/Notice'
 import { formatDate, slotText, timeAgo } from '../../lib/format'
+import { acceptsApplications, programEnded, useDhakaToday } from '../../lib/programDates'
+import LeaveProgramButton from './LeaveProgramButton'
 import { card, Cover, DateBadge, membershipStatus, ubtn } from './bits'
 import { CommentBubble } from './UserHome'
 
@@ -53,6 +55,8 @@ export default function ProgramPage() {
 }
 
 function Hero({ p }: { p: ProgramDetail }) {
+  const today = useDhakaToday()
+  const canApply = acceptsApplications(p, today)
   const join = useUserAction(() => userApi.join(p.id, { role: 'participant' }), () => refreshAfter.join(p.id))
   const day = new Date(`${p.event_date}T12:00:00+06:00`)
     .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TZ })
@@ -76,16 +80,19 @@ function Hero({ p }: { p: ProgramDetail }) {
           {p.venue} · Organized by <strong className="text-ink">{p.organizer_name}</strong>
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          {p.my_membership ? (
+          {!canApply ? (
+            <p className="font-semibold">{programEnded(p, today) ? 'This program has ended' : 'This program is not accepting applications'}</p>
+          ) : p.my_membership ? (
             membershipStatus(p.my_membership)
           ) : (
             <button type="button" className={ubtn.primary} onClick={() => join.mutate(undefined)} disabled={join.isPending || p.seats_left <= 0}>
               <Check className="size-5" aria-hidden /> {p.seats_left <= 0 ? 'Program is full' : 'Join as participant'}
             </button>
           )}
-          {!p.my_membership && p.needs.some((n) => n.state === 'open' && ['skill', 'time', 'equipment', 'space'].includes(n.type)) && (
+          {canApply && p.my_membership?.role === 'participant' && <LeaveProgramButton programId={p.id} />}
+          {canApply && p.my_membership?.role !== 'contributor' && p.needs.some((n) => n.state === 'open' && ['skill', 'time', 'equipment', 'space'].includes(n.type)) && (
             <a href="#contribute" className={ubtn.soft}>
-              Offer to help
+              {p.my_membership?.role === 'participant' ? 'Switch to helping' : 'Offer to help'}
             </a>
           )}
           <a href="#discussion" className={ubtn.ghost}>
@@ -283,27 +290,30 @@ function People({ p }: { p: ProgramDetail }) {
 }
 
 function Contribute({ p }: { p: ProgramDetail }) {
+  const today = useDhakaToday()
+  const canApply = acceptsApplications(p, today)
+  const switching = p.my_membership?.role === 'participant'
   const options = p.needs.filter((n) => n.state === 'open' && ['skill', 'time', 'equipment', 'space'].includes(n.type))
   const [role, setRole] = useState<ContributionRole>(options.some((n) => n.type === 'skill') ? 'trainer' : 'contributor')
   const [needId, setNeedId] = useState('')
   const eligible = options.filter((n) => role !== 'trainer' || n.type === 'skill')
   const selected = eligible.find((n) => n.id === needId) ?? eligible[0]
   const join = useUserAction(() =>
-    userApi.join(p.id, { role: 'contributor', contribution_role: role, need_id: selected!.id }),
+    userApi.join(p.id, { role: 'contributor', contribution_role: role, need_id: selected!.id, switch_from_participant: switching }),
     () => refreshAfter.join(p.id),
   )
-  const label = role === 'trainer' ? 'Apply as trainer' : 'Apply as contributor'
+  const label = switching ? 'Switch to helping and release my seat' : role === 'trainer' ? 'Apply as trainer' : 'Apply as contributor'
 
   return (
     <section id="contribute" className={`${card} scroll-mt-36`}>
       <h2 className="text-lg font-bold">Contribute to this program</h2>
-      {p.my_membership?.role === 'contributor' ? (
+      {!canApply ? (
+        <p className="mt-2 text-ink-soft">{programEnded(p, today) ? 'This program has ended.' : 'This program is not accepting applications.'}</p>
+      ) : p.my_membership?.role === 'contributor' ? (
         <div className="mt-3 flex flex-col gap-2">
           {membershipStatus(p.my_membership)}
           <p className="text-ink-soft">You can change or withdraw your offer on My contributions.</p>
         </div>
-      ) : p.my_membership ? (
-        <p className="mt-2 text-ink-soft">You joined as a participant. Thank you!</p>
       ) : options.length === 0 ? (
         <p className="mt-2 text-ink-soft">Everything this program needs is covered right now.</p>
       ) : (
@@ -314,6 +324,7 @@ function Contribute({ p }: { p: ProgramDetail }) {
             join.mutate(undefined)
           }}
         >
+          {switching && <Notice tone="info">Switching releases your participant seat immediately. You will be waiting for organizer approval as a helper. If the application cannot be sent, you keep your seat.</Notice>}
           <p className="inline-flex items-center gap-1.5 font-semibold text-warning">
             <Clock3 className="size-4" aria-hidden /> {options.map((o) => o.title).join(', ')}: still needed
           </p>
@@ -336,7 +347,7 @@ function Contribute({ p }: { p: ProgramDetail }) {
             </select>
           </label>
           {join.isError && <Notice tone="error">{join.error instanceof Error ? join.error.message : 'Could not send.'}</Notice>}
-          <button type="submit" className={`${ubtn.primary} min-h-14 text-lg`} disabled={join.isPending || !selected || p.status !== 'live'}>
+          <button type="submit" className={`${ubtn.primary} min-h-14 text-lg`} disabled={join.isPending || !selected || !canApply}>
             {join.isPending ? 'Sending…' : label}
           </button>
           <p className="text-sm text-ink-soft">The organizer checks every contributor before the program.</p>

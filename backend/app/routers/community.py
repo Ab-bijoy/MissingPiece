@@ -37,7 +37,7 @@ Viewer = Annotated[AppUser | None, Depends(optional_viewer)]
 def feed(db: DB, user: Viewer, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
     projects = db.scalars(
         select(Project)
-        .where(Project.status == ProjectStatus.live)
+        .where(Project.status == ProjectStatus.live, Project.event_date >= svc.local_today())
         .order_by(Project.created_at.desc(), Project.id)
         .limit(limit)
         .offset(offset)
@@ -48,6 +48,11 @@ def feed(db: DB, user: Viewer, limit: int = Query(50, ge=1, le=200), offset: int
 @router.post("/events/{project_id}/join", status_code=204)
 def join(project_id: uuid.UUID, body: JoinIn, user: General, db: DB) -> None:
     svc.join(db, user, project_id, body)
+
+
+@router.post("/events/{project_id}/leave", status_code=204)
+def leave(project_id: uuid.UUID, user: General, db: DB) -> None:
+    svc.leave(db, user, project_id)
 
 
 @router.get("/me/memberships")
