@@ -56,16 +56,21 @@ export default function LoginPage({ role }: { role: UserRole }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { loadMe, signOut } = useAuth()
-  const state = location.state as { notice?: string; from?: string } | null
+  const state = location.state as { notice?: string; from?: string; success?: string } | null
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(state?.notice ?? null)
+  // A good-news message, e.g. after setting a new password
+  const [success] = useState<string | null>(state?.success ?? null)
   const [busy, setBusy] = useState(false)
 
   // A guard sent us here because the account cannot use this area: end that session.
   // Then drop the notice from history, so a reload or Back does not show it again.
+  useEffect(() => {
+    if (state?.success) navigate(location.pathname, { replace: true, state: null })
+  }, [state?.success, navigate, location.pathname])
   useEffect(() => {
     if (!state?.notice) return
     void signOut()
@@ -106,6 +111,7 @@ export default function LoginPage({ role }: { role: UserRole }) {
     <AuthLayout homeTo={copy.home}>
       <form onSubmit={submit} className="flex flex-col gap-4.5" noValidate>
         <AuthHeading chip={copy.chip} title={copy.title} intro={copy.intro} />
+        {success && !error && <Notice tone="success">{success}</Notice>}
         {error && <Notice tone="error">{error}</Notice>}
         <TextField
           label="Email"

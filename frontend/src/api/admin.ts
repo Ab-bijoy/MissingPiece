@@ -32,6 +32,8 @@ export const adminApi = {
 
   payments: () => api<AdminPayment[]>('/admin/payments'),
   payout: (id: string) => api<AdminPayment>(`/admin/payments/${id}/payout`, { method: 'POST' }),
+  /** The money was sent back to the sponsor by hand */
+  refunded: (id: string) => api<AdminPayment>(`/admin/payments/${id}/refunded`, { method: 'POST' }),
 
   hiddenComments: () => api<AdminComment[]>('/admin/comments', { query: { status: 'hidden' } }),
   deleteComment: (id: string) => api<void>(`/admin/comments/${id}`, { method: 'DELETE' }),

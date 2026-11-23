@@ -174,6 +174,15 @@ export function handleAdmin(method: string, path: string, body: unknown, me: Me,
     return done(ok({ id: p.id }))
   }
 
+  g = m(/^\/admin\/payments\/([^/]+)\/refunded$/)
+  if (g && method === 'POST') {
+    const p = data.payments.find((x) => x.id === g![1])
+    if (!p) return fail(404, 'Payment not found.', 'not_found')
+    if (p.status !== 'refund_due') return fail(409, 'Only a payment waiting for a refund can be marked refunded.', 'bad_status')
+    p.status = 'refunded'
+    return done(ok({ id: p.id }))
+  }
+
   // Hidden comments
   if (path === '/admin/comments' && method === 'GET') {
     const list: AdminComment[] = data.comments

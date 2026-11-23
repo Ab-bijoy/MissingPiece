@@ -50,7 +50,7 @@ export type OfferStage = 'offered' | 'accepted' | 'received' | 'declined' | 'wit
 export type ContributionRole = 'trainer' | 'contributor'
 export type MembershipStatus = 'pending' | 'approved' | 'rejected'
 export type MatchStatus = 'suggested' | 'requested' | 'dismissed'
-export type PaymentStatus = 'pending' | 'succeeded' | 'failed' | 'paid_out'
+export type PaymentStatus = 'pending' | 'succeeded' | 'failed' | 'paid_out' | 'refund_due' | 'refunded'
 
 /** A need as sent when creating a project or adding a need */
 export type NeedInput = {
@@ -229,7 +229,7 @@ export type Message = {
 export type NotificationType =
   | 'request_received' | 'offer_received' | 'offer_accepted' | 'offer_declined' | 'offer_withdrawn'
   | 'offer_expired' | 'need_covered' | 'item_received' | 'membership_pending' | 'membership_approved'
-  | 'membership_rejected' | 'payment_succeeded' | 'payment_failed' | 'message_received'
+  | 'membership_rejected' | 'payment_succeeded' | 'payment_failed' | 'payment_refund_due' | 'message_received'
   | 'comment_posted' | 'comment_replied' | 'registration_approved' | 'registration_rejected'
 
 export type AppNotification = {
@@ -340,6 +340,10 @@ export type PaymentQuote = {
   commission: number
   total: number
   last_payment_status: PaymentStatus | null
+  offer_stage: OfferStage
+  project_id: string
+  /** A payment was started in the last 15 minutes and has no answer yet */
+  payment_in_progress: boolean
 }
 
 /** POST /offers/{id}/payments */

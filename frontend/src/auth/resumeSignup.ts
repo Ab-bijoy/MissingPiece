@@ -11,7 +11,7 @@ export async function resumeSignup(email: string, password: string, loadMe: () =
   try {
     await authService.signIn(email, password, true)
   } catch {
-    throw new Error('An account with this email already exists. Log in instead, or use “Forgot password?”.')
+    throw new Error('This email is already in use.')
   }
   const me = await loadMe().catch(() => null)
   if (me) {

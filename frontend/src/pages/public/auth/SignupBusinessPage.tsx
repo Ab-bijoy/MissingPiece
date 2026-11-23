@@ -6,6 +6,8 @@ import { resumeSignup } from '../../../auth/resumeSignup'
 import { pendingSignup } from '../../../auth/pendingSignup'
 import { FileField, fileProblem, SelectField, TextField } from '../../../components/ui/Field'
 import Notice from '../../../components/ui/Notice'
+import { digitsOnly, phoneProblem } from '../../../lib/validate'
+import NewPasswordFields, { validateNewPassword } from '../../../components/ui/NewPasswordFields'
 import { btn } from '../../../components/ui/buttons'
 import AuthLayout, { AuthHeading } from './AuthLayout'
 
@@ -87,6 +89,7 @@ export default function SignupBusinessPage({ role }: { role: Role }) {
   )
   const [email, setEmail] = useState(start?.email ?? '')
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   const [file, setFile] = useState<File | null>(start?.file ?? null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -97,8 +100,11 @@ export default function SignupBusinessPage({ role }: { role: Role }) {
   function validate() {
     const e: Record<string, string> = {}
     for (const f of c.fields) if (!values[f.name]?.trim()) e[f.name] = `Please fill in ${f.label.toLowerCase()}.`
+    const phoneErr = values.phone?.trim() ? phoneProblem(values.phone) : null
+    if (phoneErr) e.phone = phoneErr
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) e.email = 'Please enter a valid work email.'
-    if (password.length < 8) e.password = 'Use at least 8 characters.'
+    // A weak password is not accepted (the same rules Supabase enforces)
+    Object.assign(e, validateNewPassword(password, confirm, [email, values[c.nameField], values.contact_person]) ?? {})
     const fp = fileProblem(file)
     if (fp) e.file = fp
     setErrors(e)
@@ -159,8 +165,11 @@ export default function SignupBusinessPage({ role }: { role: Role }) {
               label={f.label}
               type={f.name === 'phone' ? 'tel' : 'text'}
               autoComplete={f.name === 'phone' ? 'tel' : undefined}
+              inputMode={f.name === 'phone' ? 'numeric' : undefined}
+              placeholder={f.name === 'phone' ? '01712345678' : undefined}
+              hint={f.name === 'phone' ? '11-digit mobile number' : undefined}
               value={values[f.name]}
-              onChange={(e) => set(f.name, e.target.value)}
+              onChange={(e) => set(f.name, f.name === 'phone' ? digitsOnly(e.target.value, 11) : e.target.value)}
               error={errors[f.name]}
             />
           ),
@@ -173,14 +182,13 @@ export default function SignupBusinessPage({ role }: { role: Role }) {
           onChange={(e) => setEmail(e.target.value)}
           error={errors.email}
         />
-        <TextField
-          label="Password"
-          type="password"
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          error={errors.password}
-          hint="At least 8 characters."
+        <NewPasswordFields
+          password={password}
+          confirm={confirm}
+          onPassword={setPassword}
+          onConfirm={setConfirm}
+          personal={[email, values[c.nameField], values.contact_person]}
+          errors={{ password: errors.password, confirm: errors.confirm }}
         />
         <FileField label={c.fileLabel} hint="PDF or photo, up to 5 MB" file={file} onFile={setFile} error={errors.file} />
         <button type="submit" className={btn.primary} disabled={busy}>

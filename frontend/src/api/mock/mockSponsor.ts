@@ -185,6 +185,8 @@ export function handleSponsor(method: string, path: string, body: unknown, me: M
     if (o.from_user_id !== me.id) return fail(403, 'You can only withdraw your own offers.', 'forbidden')
     if (o.stage === 'received') return fail(409, 'This offer was already received, so it cannot be withdrawn.', 'already_received')
     if (o.stage !== 'offered' && o.stage !== 'accepted') return fail(409, 'This offer is no longer open.', 'bad_stage')
+    if (data.payments.some((x) => x.offer_id === o.id && x.status === 'pending'))
+      return fail(409, 'Your payment for this offer is still in progress, so it cannot be withdrawn now.', 'payment_in_progress')
     const n = needOf(o.need_id)
     if (o.stage === 'accepted') n.status = 'open' // booking goes with it
     o.stage = 'withdrawn'
@@ -207,9 +209,16 @@ export function handleSponsor(method: string, path: string, body: unknown, me: M
       return ok({
         offer_id: o.id, project_name: p.name, organizer_name: nameOf(p.organizer_id), need_title: n.title, amount: o.amount,
         commission, total: o.amount + commission, last_payment_status: data.payments.filter((x) => x.offer_id === o.id).at(-1)?.status ?? null,
+        offer_stage: o.stage, project_id: p.id,
+        payment_in_progress: data.payments.some((x) => x.offer_id === o.id && x.status === 'pending'),
       })
     if (g[2] === 'payments' && method === 'POST') {
+      if (data.payments.some((x) => x.offer_id === o.id && (x.status === 'succeeded' || x.status === 'paid_out')))
+        return fail(409, 'This offer is already paid. Thank you!', 'already_paid')
       if (o.stage !== 'accepted') return fail(409, 'You can pay only after the organizer accepts your offer.', 'bad_stage')
+      // One payment at a time: carry on with the one already started
+      const started = data.payments.find((x) => x.offer_id === o.id && x.status === 'pending')
+      if (started) return ok({ payment_id: started.id, checkout_url: `/sponsor/checkout/${started.id}` }, 201)
       const pay = { id: newId('pay'), offer_id: o.id, gross_amount: o.amount + commission, commission_amount: commission, net_amount: o.amount, status: 'pending' as const }
       data.payments.push(pay)
       // Demo gateway: a page in this app that lets you choose success or failure.

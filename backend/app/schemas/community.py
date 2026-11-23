@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-from app.schemas.common import Schema
+from app.schemas.common import AGE_MAX, AGE_MIN, Schema
 
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 
@@ -20,7 +20,7 @@ class ProfileOut(Schema):
 class ProfilePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: Text | None = None
-    age: int | None = Field(default=None, ge=0, le=130, strict=True)
+    age: int | None = Field(default=None, ge=AGE_MIN, le=AGE_MAX, strict=True)
     skills: list[Text] | None = Field(default=None, max_length=50)
     items: list[Text] | None = Field(default=None, max_length=50)
 

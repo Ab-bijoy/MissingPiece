@@ -11,26 +11,45 @@ import { bdt, formatDate } from '../../lib/format'
 export default function AdminPayments() {
   const { data: payments, isPending } = useAdminPayments()
   const payout = useAdminAction((id: string) => adminApi.payout(id))
+  const refund = useAdminAction((id: string) => adminApi.refunded(id))
 
   const list = payments ?? []
   const collected = list.filter((p) => p.status === 'succeeded' || p.status === 'paid_out').reduce((s, p) => s + p.commission_amount, 0)
   const toPay = list.filter((p) => p.status === 'succeeded')
   const failed = list.filter((p) => p.status === 'failed').length
+  const refunds = list.filter((p) => p.status === 'refund_due')
 
   const markPaid = (p: AdminPayment) => {
     if (confirm(`Did you send ${bdt(p.net_amount)} to ${p.project_name}? This marks the payment as paid out.`)) payout.mutate(p.id)
+  }
+
+  const markRefunded = (p: AdminPayment) => {
+    if (confirm(`Did you send ${bdt(p.gross_amount)} back to ${p.sponsor_name}? This marks the payment as refunded.`)) refund.mutate(p.id)
   }
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <h1 className="text-[34px] font-bold">Payments</h1>
 
-      <section aria-label="Summary" className="mt-5 grid gap-3 sm:grid-cols-3">
+      <section aria-label="Summary" className={`mt-5 grid gap-3 ${refunds.length ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
         <Stat label="Commission collected (5%)" value={bdt(collected)} sub="From payments that went through" />
         <Stat label="Payouts to make" value={String(toPay.length)} sub={toPay.length ? `${bdt(toPay.reduce((s, p) => s + p.net_amount, 0))} in total · sent by hand in v1` : 'Sent by hand in v1'} />
         <Stat label="Failed payments" value={String(failed)} sub="The sponsor can retry" warn={failed > 0} />
+        {refunds.length > 0 && (
+          <Stat
+            label="Refunds to send"
+            value={String(refunds.length)}
+            sub={`${bdt(refunds.reduce((s, p) => s + p.gross_amount, 0))} back to sponsors · paid twice or after withdrawing`}
+            warn
+          />
+        )}
       </section>
 
+      {refund.isError && (
+        <div className="mt-4">
+          <Notice tone="error">{refund.error instanceof Error ? refund.error.message : 'Could not save.'}</Notice>
+        </div>
+      )}
       {payout.isError && (
         <div className="mt-4">
           <Notice tone="error">{payout.error instanceof Error ? payout.error.message : 'Could not save.'}</Notice>
@@ -70,6 +89,12 @@ export default function AdminPayments() {
                         <button type="button" className={smallBtn.primary} onClick={() => markPaid(p)} disabled={payout.isPending}>
                           Mark paid out<span className="sr-only">: {p.project_name}</span>
                         </button>
+                      ) : p.status === 'refund_due' ? (
+                        <button type="button" className={smallBtn.primary} onClick={() => markRefunded(p)} disabled={refund.isPending}>
+                          Mark refunded<span className="sr-only">: {p.sponsor_name}</span>
+                        </button>
+                      ) : p.status === 'refunded' ? (
+                        <span className="text-ink-soft">Sent back to the sponsor</span>
                       ) : p.status === 'failed' ? (
                         <span className="text-ink-soft">Waiting for retry</span>
                       ) : p.status === 'paid_out' ? (
@@ -107,6 +132,10 @@ function statusPill(p: AdminPayment) {
       return <Pill tone="received">Paid out</Pill>
     case 'failed':
       return <Pill tone="conflict">Failed</Pill>
+    case 'refund_due':
+      return <Pill tone="conflict">Refund due</Pill>
+    case 'refunded':
+      return <Pill tone="neutral">Refunded</Pill>
     default:
       return <Pill tone="open">Pending</Pill>
   }

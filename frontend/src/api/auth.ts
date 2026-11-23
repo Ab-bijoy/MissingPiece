@@ -1,10 +1,17 @@
 import { api } from './client'
-import type { Me } from './types'
+import type { Me, UserRole } from './types'
 
 // Build prompt 7.1. Log-in, log-out, email code, resend and password reset
 // happen in Supabase on the front end; only these four calls hit FastAPI.
 
 export const authApi = {
+  /**
+   * POST /api/auth/password-reset — forgot password from one log-in screen. The email is
+   * sent only if the address belongs to an account of that role; the answer is always the same.
+   */
+  requestPasswordReset: (email: string, role: UserRole) =>
+    api<{ status: string }>('/auth/password-reset', { method: 'POST', json: { email, role } }),
+
   /** GET /api/auth/me */
   me: () => api<Me>('/auth/me'),
 

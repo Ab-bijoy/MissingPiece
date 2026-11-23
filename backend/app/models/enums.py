@@ -91,6 +91,8 @@ class PaymentStatus(StrEnum):
     succeeded = "succeeded"
     failed = "failed"
     paid_out = "paid_out"
+    refund_due = "refund_due"  # paid for an offer already paid or withdrawn: send it back
+    refunded = "refunded"
 
 
 class CommentKind(StrEnum):
@@ -118,6 +120,7 @@ class NotificationType(StrEnum):
     membership_rejected = "membership_rejected"
     payment_succeeded = "payment_succeeded"
     payment_failed = "payment_failed"
+    payment_refund_due = "payment_refund_due"
     message_received = "message_received"
     comment_posted = "comment_posted"
     comment_replied = "comment_replied"

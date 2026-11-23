@@ -7,6 +7,7 @@ import type { OrgType } from '../../api/types'
 import { Card, smallBtn, Spinner } from '../../components/app/ui'
 import { TextField } from '../../components/ui/Field'
 import Notice from '../../components/ui/Notice'
+import { digitsOnly, phoneProblem } from '../../lib/validate'
 
 const ORG_TYPE: Record<OrgType, string> = { ngo: 'NGO', university: 'University club or office', community_group: 'Community group' }
 
@@ -39,7 +40,8 @@ export default function OrganizerProfilePage() {
     const errs: Record<string, string> = {}
     if (!form.org_name.trim()) errs.org_name = 'Please enter the organization name.'
     if (!form.contact_person.trim()) errs.contact_person = 'Please enter a contact person.'
-    if (!/^[+\d][\d\s-]{6,}$/.test(form.phone.trim())) errs.phone = 'Please enter a phone number.'
+    const phoneErr = phoneProblem(form.phone)
+    if (phoneErr) errs.phone = phoneErr
     setErrors(errs)
     if (!Object.keys(errs).length) save.mutate()
   }
@@ -55,7 +57,16 @@ export default function OrganizerProfilePage() {
             <TextField label="Organization name" value={form.org_name} onChange={(e) => setForm({ ...form, org_name: e.target.value })} error={errors.org_name} />
             <div className="grid gap-4 sm:grid-cols-2">
               <TextField label="Contact person" value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} error={errors.contact_person} />
-              <TextField label="Phone" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} error={errors.phone} />
+              <TextField
+                label="Phone"
+                type="tel"
+                inputMode="numeric"
+                placeholder="01712345678"
+                hint="11-digit mobile number"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: digitsOnly(e.target.value, 11) })}
+                error={errors.phone}
+              />
             </div>
           </div>
         </Card>
