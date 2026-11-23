@@ -34,12 +34,14 @@
   /* Motion */
   --animate-marquee: marquee 40s linear infinite;
   --animate-rise: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  --animate-draw: draw 2.6s cubic-bezier(0.45, 0.05, 0.25, 1) both;
+  /* Starts fast (ease-out), so there is no pause before the line shows */
+  --animate-draw: draw 2.2s cubic-bezier(0.22, 0.61, 0.36, 1) both;
   --animate-float: float 6s ease-in-out infinite;
 
   @keyframes draw {
+    /* The first ~9% of the ribbon is its transparent fade-in, so start past it */
     from {
-      stroke-dashoffset: 1;
+      stroke-dashoffset: 0.91;
     }
     to {
       stroke-dashoffset: 0;

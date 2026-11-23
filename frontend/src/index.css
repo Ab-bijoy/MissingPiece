@@ -22,6 +22,51 @@
   }
 }
 
+/* Landing pages: <main className="landing-sections">. In a layer, so a width
+   class written on an element still wins. */
+@layer components {
+  /* Each section fills the screen below the 4.5rem sticky header (tablet and up) */
+  @media (min-width: 768px) {
+    .landing-sections > section {
+      min-height: calc(100svh - 4.5rem);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .landing-sections > section > :not(.absolute) {
+      width: 100%;
+    }
+  }
+
+  /* Scroll animations (see lib/useScrollReveal.ts): the parts of each section
+     fade and rise in one after another as it comes into view */
+  .reveal-ready > section:not(:first-child):not([data-shown]) > * > * {
+    opacity: 0;
+  }
+  .reveal-ready > section[data-shown] > * > * {
+    animation: reveal 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .reveal-ready > section[data-shown] > * > :nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  .reveal-ready > section[data-shown] > * > :nth-child(3) {
+    animation-delay: 0.2s;
+  }
+  .reveal-ready > section[data-shown] > * > :nth-child(4) {
+    animation-delay: 0.3s;
+  }
+  .reveal-ready > section[data-shown] > * > :nth-child(n + 5) {
+    animation-delay: 0.4s;
+  }
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(32px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

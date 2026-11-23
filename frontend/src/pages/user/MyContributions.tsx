@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMyContributions, userApi, useUserAction } from '../../api/user'
+import { refreshAfter, useMyContributions, userApi, useUserAction } from '../../api/user'
 import type { MyContribution } from '../../api/types'
 import Notice from '../../components/ui/Notice'
 import { slotText } from '../../lib/format'
@@ -12,7 +12,7 @@ const today = () => new Date().toISOString().slice(0, 10)
 export default function MyContributions() {
   const { data, isPending, error } = useMyContributions()
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
-  const withdraw = useUserAction((offerId: string) => userApi.withdraw(offerId))
+  const withdraw = useUserAction((offerId: string) => userApi.withdraw(offerId), refreshAfter.withdraw)
 
   const isPast = (m: MyContribution) => m.project.status === 'complete' || m.project.event_date < today()
   const list = (data ?? []).filter((m) => (tab === 'past' ? isPast(m) : !isPast(m)))

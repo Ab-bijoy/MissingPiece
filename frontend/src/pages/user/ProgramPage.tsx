@@ -1,7 +1,7 @@
 import { Check, Clock3, MapPin, MessageCircleQuestion, Users } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { useProgram, useProgramComments, userApi, useUserAction } from '../../api/user'
+import { addComment, refreshAfter, useProgram, useProgramComments, userApi, useUserAction } from '../../api/user'
 import type { Comment, ContributionRole, ProgramDetail } from '../../api/types'
 import Notice from '../../components/ui/Notice'
 import { formatDate, slotText, timeAgo } from '../../lib/format'
@@ -53,7 +53,7 @@ export default function ProgramPage() {
 }
 
 function Hero({ p }: { p: ProgramDetail }) {
-  const join = useUserAction(() => userApi.join(p.id, { role: 'participant' }))
+  const join = useUserAction(() => userApi.join(p.id, { role: 'participant' }), () => refreshAfter.join(p.id))
   const day = new Date(`${p.event_date}T12:00:00+06:00`)
     .toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: TZ })
     .toUpperCase()
@@ -162,6 +162,8 @@ function Discussion({ p }: { p: ProgramDetail }) {
       body: text.trim(),
       parent_id: replyTo?.id ?? null,
     }),
+    () => refreshAfter.comment(p.id),
+    (qc, c) => addComment(qc, p.id, c),
   )
   const top = (comments ?? []).filter((c) => !c.parent_id)
   const repliesOf = (id: string) => (comments ?? []).filter((c) => c.parent_id === id)
@@ -288,6 +290,7 @@ function Contribute({ p }: { p: ProgramDetail }) {
   const selected = eligible.find((n) => n.id === needId) ?? eligible[0]
   const join = useUserAction(() =>
     userApi.join(p.id, { role: 'contributor', contribution_role: role, need_id: selected!.id }),
+    () => refreshAfter.join(p.id),
   )
   const label = role === 'trainer' ? 'Apply as trainer' : 'Apply as contributor'
 

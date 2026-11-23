@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError, forbidden, must, not_found
@@ -12,7 +12,6 @@ from app.models import (
     MessageThread,
     Need,
     Offer,
-    Payment,
     Project,
     Receipt,
     SponsorProfile,
@@ -32,6 +31,7 @@ from app.schemas.sponsor import (
     SponsorRequestDetail,
     SponsorRequestSummary,
 )
+from app.services import loaders
 from app.services.notifications import notify
 from app.services.views import event_facts, holding_offer, offer_out, qty_text, today
 
@@ -48,6 +48,16 @@ def _my_request(db: Session, sponsor: AppUser, request_id: uuid.UUID) -> Sponsor
     return r
 
 
+def _latest_offers(db: Session, request_ids: list[uuid.UUID], sponsor: AppUser) -> dict[uuid.UUID, Offer]:
+    """This sponsor's most recent offer per request, for many requests in one query."""
+    if not request_ids:
+        return {}
+    rank = func.row_number().over(partition_by=Offer.request_id, order_by=Offer.created_at.desc()).label("rank")
+    sub = select(Offer.id, rank).where(Offer.request_id.in_(request_ids), Offer.from_user_id == sponsor.id).subquery()
+    rows = db.scalars(select(Offer).join(sub, sub.c.id == Offer.id).where(sub.c.rank == 1)).all()
+    return {o.request_id: o for o in rows}
+
+
 def _latest_offer(db: Session, r: SponsorRequest, sponsor: AppUser) -> Offer | None:
     return db.scalar(
         select(Offer)
@@ -57,9 +67,23 @@ def _latest_offer(db: Session, r: SponsorRequest, sponsor: AppUser) -> Offer | N
     )
 
 
-def request_state(db: Session, r: SponsorRequest, sponsor: AppUser, project: Project) -> RequestState:
-    """Where a request stands for this sponsor, in the words the inbox shows."""
-    mine = _latest_offer(db, r, sponsor)
+_UNSET = object()
+
+
+def request_state(
+    db: Session,
+    r: SponsorRequest,
+    sponsor: AppUser,
+    project: Project,
+    mine: Offer | None | object = _UNSET,
+    hold: Offer | None | object = _UNSET,
+) -> RequestState:
+    """Where a request stands for this sponsor, in the words the inbox shows.
+
+    `mine` and `hold` can be passed in when already loaded (the inbox loads them for all rows at once).
+    """
+    if mine is _UNSET:
+        mine = _latest_offer(db, r, sponsor)
     if mine is not None:
         match mine.stage:
             case OfferStage.offered:
@@ -70,7 +94,8 @@ def request_state(db: Session, r: SponsorRequest, sponsor: AppUser, project: Pro
                 return "received"
             case OfferStage.expired:
                 return "expired"
-    hold = holding_offer(db, r.need_id)
+    if hold is _UNSET:
+        hold = holding_offer(db, r.need_id)
     if (hold and hold.from_user_id != sponsor.id) or (mine and mine.stage == OfferStage.declined):
         return "covered_by_other"
     if mine and mine.stage == OfferStage.withdrawn:
@@ -93,6 +118,9 @@ def inbox(db: Session, sponsor: AppUser, limit: int, offset: int) -> list[Sponso
         .limit(limit)
         .offset(offset)
     ).all()
+    # Two batch queries for the whole page instead of two per request
+    latest = _latest_offers(db, [r.id for r, _, _ in rows], sponsor)
+    holds = loaders.holding_offers(db, (r.need_id for r, _, _ in rows))
     return [
         SponsorRequestSummary(
             id=r.id,
@@ -100,7 +128,7 @@ def inbox(db: Session, sponsor: AppUser, limit: int, offset: int) -> list[Sponso
             project_name=p.name,
             need_title=n.title,
             need_amount=qty_text(n),
-            state=request_state(db, r, sponsor, p),
+            state=request_state(db, r, sponsor, p, mine=latest.get(r.id), hold=holds.get(r.need_id)),
             decide_by=r.decide_by,
             created_at=r.created_at,
         )
@@ -195,12 +223,12 @@ def my_offers(db: Session, sponsor: AppUser, limit: int, offset: int) -> list[Sp
         .limit(limit)
         .offset(offset)
     ).all()
+    ids = [o.id for o, _, _ in rows]
+    flags = loaders.benefit_flags(db, ids)
+    pays = loaders.latest_payment_status(db, ids)
     out = []
     for o, n, p in rows:
-        benefits = db.scalars(select(Benefit.given).where(Benefit.offer_id == o.id)).all()
-        pay = db.scalar(
-            select(Payment.status).where(Payment.offer_id == o.id).order_by(Payment.created_at.desc()).limit(1)
-        )
+        benefits = flags.get(o.id, [])
         out.append(
             SponsorOfferRow(
                 id=o.id,
@@ -214,7 +242,7 @@ def my_offers(db: Session, sponsor: AppUser, limit: int, offset: int) -> list[Sp
                 stage=o.stage.value,
                 benefits_given=sum(1 for g in benefits if g),
                 benefits_total=len(benefits),
-                payment_status=pay.value if pay else None,
+                payment_status=pays.get(o.id),
                 project_status=p.status.value,
             )
         )

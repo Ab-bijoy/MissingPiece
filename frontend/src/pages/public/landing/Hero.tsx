@@ -1,19 +1,20 @@
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useReplayOnTop } from '../../../lib/useReplayOnTop'
 
 const HEADLINE = ['WE', 'ARE', 'THE', 'MISSING', 'PIECE']
 
 // One ribbon that loops through the headline. Drawn twice: once behind the
 // letters and once in front (shown only in a few windows) so it weaves through.
 const RIBBON =
-  'M -60 250 C 90 250, 170 110, 290 105 C 420 100, 440 300, 330 322 C 230 342, 225 196, 372 168 C 540 136, 600 338, 770 306 C 915 278, 865 92, 990 88 C 1112 84, 1092 306, 1215 304 C 1318 302, 1360 184, 1500 160'
+  'M -60 250 C 90 250, 170 110, 290 105 C 420 100, 440 300, 330 322 C 230 342, 225 196, 372 168 C 540 136, 600 338, 770 306 C 915 278, 865 92, 990 88 C 1112 84, 1092 306, 1215 304 C 1318 302, 1360 184, 1500 160 C 1640 136, 1900 150, 2300 150'
 
 function Ribbon({ front = false }: { front?: boolean }) {
   return (
     <svg
       viewBox="0 0 1440 420"
       preserveAspectRatio="none"
-      className={`pointer-events-none absolute inset-x-0 top-1/2 h-[120%] w-full -translate-y-1/2 ${front ? 'z-20' : 'z-0'}`}
+      className={`pointer-events-none absolute inset-x-0 overflow-visible top-1/2 h-[120%] w-full -translate-y-1/2 ${front ? 'z-20' : 'z-0'}`}
       aria-hidden
     >
       <defs>
@@ -54,6 +55,7 @@ function Ribbon({ front = false }: { front?: boolean }) {
 }
 
 export default function Hero() {
+  const replay = useReplayOnTop() // redraw the swish on each return to the top
   let letterIndex = 0
 
   return (
@@ -72,7 +74,7 @@ export default function Hero() {
       </div>
 
       <div className="relative mx-auto flex w-full max-w-[1440px] flex-1 items-center justify-center py-16">
-        <Ribbon />
+        <Ribbon key={`b${replay}`} />
         <h1
           aria-label="We are the missing piece"
           className="relative z-10 px-4 text-center font-display leading-[0.9] font-extrabold tracking-tight text-brand text-[clamp(3.4rem,9.4vw,9.5rem)]"
@@ -95,7 +97,7 @@ export default function Hero() {
             </span>
           ))}
         </h1>
-        <Ribbon front />
+        <Ribbon key={`f${replay}`} front />
       </div>
     </section>
   )

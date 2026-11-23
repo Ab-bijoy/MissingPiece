@@ -1,6 +1,5 @@
 import { authService } from '../auth/authService'
 import { env } from '../lib/env'
-import { mockFetch } from './mock/mockApi'
 import type { ApiErrorBody } from './types'
 
 export class ApiError extends Error {
@@ -52,7 +51,8 @@ export async function api<T>(path: string, opts: Options = {}): Promise<T> {
 
   let res: Response
   try {
-    res = env.useMocks ? await mockFetch(url, init) : await fetch(url, init)
+    // Demo data is only downloaded in demo mode
+    res = env.useMocks ? await (await import('./mock/mockApi')).mockFetch(url, init) : await fetch(url, init)
   } catch {
     throw new ApiError(0, { detail: 'Could not reach MissingPiece. Check your connection and try again.' })
   }

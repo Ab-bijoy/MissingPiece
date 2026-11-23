@@ -7,12 +7,12 @@ from sqlalchemy import select
 
 from app.auth import DB, ActiveUser
 from app.errors import not_found
-from app.models import Need, Project
+from app.models import Project
 from app.models.enums import NeedType, ProjectStatus
 from app.schemas.common import NeedOut
 from app.schemas.sponsor import EventDetail, EventNeed, EventSummary
-from app.services.community import community_fields
-from app.services.views import event_facts, holding_offer, qty_text
+from app.services import loaders
+from app.services.views import qty_text
 
 router = APIRouter(prefix="/api", tags=["events"])
 
@@ -27,13 +27,17 @@ def list_events(user: ActiveUser, db: DB, limit: int = Query(50, ge=1, le=200), 
         .limit(limit)
         .offset(offset)
     ).all()
+    # Batched: about 6 queries for the whole page, whatever its length
+    pids = [p.id for p in projects]
+    needs = loaders.needs_by_project(db, pids)
+    holds = loaders.holding_offers(db, (n.id for ns in needs.values() for n in ns))
+    facts = loaders.event_facts_many(db, list(projects))
     out = []
     for p in projects:
-        needs = db.scalars(select(Need).where(Need.project_id == p.id).order_by(Need.created_at)).all()
-        still_open = [n for n in needs if holding_offer(db, n.id) is None]
+        still_open = [n for n in needs.get(p.id, []) if n.id not in holds]
         out.append(
             EventSummary(
-                **event_facts(db, p).model_dump(),
+                **facts[p.id].model_dump(),
                 still_needed=[f"{qty_text(n)} for {n.title.lower()}" for n in still_open],
                 open_needs=len(still_open),
                 needs_money=any(n.type == NeedType.money for n in still_open),
@@ -47,11 +51,13 @@ def event(project_id: uuid.UUID, user: ActiveUser, db: DB):
     p = db.get(Project, project_id)
     if p is None or p.status == ProjectStatus.draft:
         raise not_found("Event")
-    needs = db.scalars(select(Need).where(Need.project_id == p.id).order_by(Need.created_at)).all()
+    needs = loaders.needs_by_project(db, [p.id]).get(p.id, [])
+    holds = loaders.holding_offers(db, (n.id for n in needs))
     detail_needs = []
     for n in needs:
-        hold = holding_offer(db, n.id)
+        hold = holds.get(n.id)
         state = "open" if hold is None else ("received" if hold.stage.value == "received" else "covered")
         detail_needs.append(EventNeed(**NeedOut.model_validate(n).model_dump(), state=state))
-    return EventDetail(**event_facts(db, p).model_dump(), description=p.description, needs=detail_needs,
-                       **community_fields(db, p, user))
+    facts = loaders.event_facts_many(db, [p])  # computed once, shared with the community fields
+    community = loaders.community_fields_many(db, [p], user, facts)[p.id]
+    return EventDetail(**facts[p.id].model_dump(), description=p.description, needs=detail_needs, **community)

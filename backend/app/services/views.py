@@ -4,12 +4,12 @@ import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.errors import must
-from app.models import AppUser, Benefit, EventMembership, Need, Offer, Payment, Project, Template
-from app.models.enums import MembershipRole, MembershipStatus, NeedType, OfferStage
+from app.models import AppUser, Benefit, EventMembership, Need, Offer, Payment, Project
+from app.models.enums import NeedType, OfferStage
 from app.schemas.common import BenefitOut, EventFacts, OfferOut
 
 HOLDING = (OfferStage.accepted, OfferStage.received)
@@ -42,29 +42,10 @@ def holding_offer(db: Session, need_id: uuid.UUID) -> Offer | None:
 
 
 def event_facts(db: Session, p: Project) -> EventFacts:
-    counts = dict(
-        db.execute(
-            select(EventMembership.role, func.count())
-            .where(EventMembership.project_id == p.id, EventMembership.status == MembershipStatus.approved)
-            .group_by(EventMembership.role)
-        ).all()
-    )
-    project_type = (
-        db.scalar(select(Template.project_type).where(Template.id == p.template_id)) if p.template_id else None
-    )
-    return EventFacts(
-        id=p.id,
-        name=p.name,
-        project_type=project_type,
-        organizer_name=name_of(db, p.organizer_id),
-        institution=p.institution,
-        event_date=p.event_date,
-        venue=p.venue,
-        audience=p.audience,
-        status=p.status.value,
-        participants=counts.get(MembershipRole.participant, 0),
-        contributors=counts.get(MembershipRole.contributor, 0),
-    )
+    """One program's facts. For lists use loaders.event_facts_many (same queries for all rows)."""
+    from app.services.loaders import event_facts_many
+
+    return event_facts_many(db, [p])[p.id]
 
 
 def offer_out(db: Session, o: Offer) -> OfferOut:

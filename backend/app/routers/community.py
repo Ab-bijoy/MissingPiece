@@ -42,7 +42,7 @@ def feed(db: DB, user: Viewer, limit: int = Query(50, ge=1, le=200), offset: int
         .limit(limit)
         .offset(offset)
     ).all()
-    return [svc.feed_item(db, p, user) for p in projects]
+    return svc.feed_items(db, projects, user)
 
 
 @router.post("/events/{project_id}/join", status_code=204)
@@ -76,7 +76,7 @@ def comments(
     rows = db.scalars(
         svc.comment_query(p, user).order_by(Comment.created_at, Comment.id).limit(limit).offset(offset)
     ).all()
-    return [svc.comment_out(db, c) for c in rows]
+    return svc.comments_out(db, p, rows)
 
 
 @router.post("/events/{project_id}/comments", status_code=201)

@@ -1,7 +1,7 @@
 import { CalendarDays, Heart, HelpingHand, Send, Type } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { useFeed, useMyContributions, useMyProfile, userApi, useUserAction } from '../../api/user'
+import { addComment, refreshAfter, useFeed, useMyContributions, useMyProfile, userApi, useUserAction } from '../../api/user'
 import type { FeedItem } from '../../api/types'
 import { useAuth } from '../../auth/AuthProvider'
 import Notice from '../../components/ui/Notice'
@@ -76,7 +76,12 @@ function AskBox({ feed }: { feed: FeedItem[] }) {
   const [text, setText] = useState('')
   const [pid, setPid] = useState('')
   const [sent, setSent] = useState(false)
-  const ask = useUserAction(() => userApi.postComment(pid || feed[0]!.id, { kind: 'question', body: text.trim(), parent_id: null }))
+  const target = pid || feed[0]?.id || ''
+  const ask = useUserAction(
+    () => userApi.postComment(target, { kind: 'question', body: text.trim(), parent_id: null }),
+    () => refreshAfter.comment(target),
+    (qc, c) => addComment(qc, target, c),
+  )
   if (!feed.length) return null
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -131,8 +136,12 @@ function AskBox({ feed }: { feed: FeedItem[] }) {
 function Post({ item }: { item: FeedItem }) {
   const { me } = useAuth()
   const [text, setText] = useState('')
-  const join = useUserAction(() => userApi.join(item.id, { role: 'participant' }))
-  const comment = useUserAction(() => userApi.postComment(item.id, { kind: 'comment', body: text.trim(), parent_id: null }))
+  const join = useUserAction(() => userApi.join(item.id, { role: 'participant' }), () => refreshAfter.join(item.id))
+  const comment = useUserAction(
+    () => userApi.postComment(item.id, { kind: 'comment', body: text.trim(), parent_id: null }),
+    () => refreshAfter.comment(item.id),
+    (qc, c) => addComment(qc, item.id, c),
+  )
   const preview = item.comments_preview[0]
   const help = item.help_needed
 

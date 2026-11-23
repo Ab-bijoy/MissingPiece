@@ -5,6 +5,8 @@ import PublicFooter, { type FooterColumn } from '../../../components/layout/Publ
 import PublicHeader, { type SectionLink } from '../../../components/layout/PublicHeader'
 import PuzzlePiece from '../../../components/PuzzlePiece'
 import Ribbon from '../../../components/Ribbon'
+import { useReplayOnTop } from '../../../lib/useReplayOnTop'
+import { useScrollReveal } from '../../../lib/useScrollReveal'
 
 type Icon = ComponentType<SVGProps<SVGSVGElement>>
 
@@ -53,6 +55,7 @@ export type RoleContent = {
 
 function Hero({ c }: { c: RoleContent }) {
   const t = c.theme
+  const replay = useReplayOnTop() // redraw the swish on each return to the top
   let letterIndex = 0
   return (
     <section className={`relative overflow-hidden ${t.heroBg}`}>
@@ -62,7 +65,7 @@ function Hero({ c }: { c: RoleContent }) {
           {c.eyebrow}
         </p>
         <div className="relative w-full py-10">
-          <Ribbon color={t.ribbon} />
+          <Ribbon key={`b${replay}`} color={t.ribbon} />
           <h1
             aria-label={c.headline.join(' ')}
             className={`relative z-10 text-center font-display leading-[0.9] font-extrabold tracking-tight text-[clamp(3.2rem,8.6vw,8.75rem)] ${t.heroTitle}`}
@@ -81,7 +84,7 @@ function Hero({ c }: { c: RoleContent }) {
               </span>
             ))}
           </h1>
-          <Ribbon color={t.ribbon} front />
+          <Ribbon key={`f${replay}`} color={t.ribbon} front />
         </div>
         <p className={`relative z-30 mt-10 max-w-2xl text-center text-lg leading-relaxed sm:text-xl ${t.heroText}`}>
           {c.intro}
@@ -296,6 +299,7 @@ function footerColumns(c: RoleContent): FooterColumn[] {
 
 /** Shared layout for the organizer, sponsor and community landing pages. */
 export default function RoleLanding({ content }: { content: RoleContent }) {
+  const main = useScrollReveal<HTMLElement>()
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [content])
@@ -303,7 +307,7 @@ export default function RoleLanding({ content }: { content: RoleContent }) {
   return (
     <>
       <PublicHeader sections={SECTIONS} loginTo={content.secondary.to} cta={content.primary} />
-      <main className={content.theme.main}>
+      <main ref={main} className={`landing-sections ${content.theme.main}`}>
         <Hero c={content} />
         <Features c={content} />
         <Steps c={content} />
