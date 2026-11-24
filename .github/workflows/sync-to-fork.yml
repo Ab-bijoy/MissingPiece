@@ -1,0 +1,146 @@
+# Test every change, and copy main to the deployment fork only when the tests pass.
+#
+#   pull request to main  -> backend tests + frontend checks (no sync)
+#   push / merge to main  -> backend tests + frontend checks -> sync to the fork
+#
+# The fork's main must only ever change through this workflow: it is a mirror.
+# Amplify (frontend) and the EC2 server (backend) deploy from the fork.
+#
+# One-time setup (see the steps in the pull request or the team notes):
+#   - Secret  FORK_DEPLOY_KEY : private half of an SSH key whose public half is a
+#                               deploy key WITH WRITE ACCESS on the fork
+#   - Variable FORK_REPO      : the fork as owner/name, e.g. someone/MissingPiece
+
+name: Test and sync to deployment fork
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: 
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: missingpiece_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/missingpiece_ci
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: |
+          poetry config virtualenvs.in-project true
+          poetry install --no-interaction
+
+      - name: Lint (ruff)
+        run: poetry run ruff check .
+
+      - name: Create the tables (migrations)
+        run: poetry run alembic upgrade head
+
+      - name: Run tests
+        run: poetry run pytest -q
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Type-check and build
+        run: npm run build
+
+  sync:
+    name: Sync main to the fork
+    needs: [backend, frontend] 
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    concurrency:
+      group: sync-to-fork
+      cancel-in-progress: false
+    steps:
+      - name: Check the settings exist
+        env:
+          FORK_DEPLOY_KEY: ${{ secrets.FORK_DEPLOY_KEY }}
+          FORK_REPO: ${{ vars.FORK_REPO }}
+        run: |
+          if [ -z "$FORK_DEPLOY_KEY" ] || [ -z "$FORK_REPO" ]; then
+            echo "::error::Set the FORK_DEPLOY_KEY secret and the FORK_REPO variable in this repo's Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Get the full history of main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Push main to the fork
+        env:
+          FORK_DEPLOY_KEY: ${{ secrets.FORK_DEPLOY_KEY }}
+          FORK_REPO: ${{ vars.FORK_REPO }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$FORK_DEPLOY_KEY" > ~/.ssh/fork_key
+          chmod 600 ~/.ssh/fork_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/fork_key -o IdentitiesOnly=yes"
+
+          # A normal (not forced) push: if someone committed to the fork directly, this
+          # stops with an error instead of silently throwing their commit away.
+          git push "git@github.com:${FORK_REPO}.git" "${GITHUB_SHA}:refs/heads/main"
+          echo "Fork ${FORK_REPO} main is now at ${GITHUB_SHA}"
+
+      - name: Remove the key
+        if: always()
+        run: rm -f ~/.ssh/fork_key
