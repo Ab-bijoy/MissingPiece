@@ -62,7 +62,7 @@ export default function AdminPayments() {
         ) : list.length === 0 ? (
           <EmptyNote>No payments yet.</EmptyNote>
         ) : (
-          <div className="-mx-2 overflow-x-auto">
+          <div className="relative -mx-2 overflow-x-auto">
             <table className="w-full min-w-[860px] text-left text-[15px]">
               <thead>
                 <tr className="text-sm text-ink-soft">

@@ -156,8 +156,8 @@ def test_organizer_pages_do_not_grow(client, f, db):
                 "benefits": ["A"],
                 "conditions": None,
                 "exclusive_category": None,
-                "decide_by": None,
-                "deliver_by": None,
+                "decide_by": str(datetime.now(UTC).date() + timedelta(days=2)),
+                "deliver_by": str(datetime.now(UTC).date() + timedelta(days=10)),
             }
             r = client.post(f"/api/projects/{p['id']}/requests", json=req, headers=org).json()
             client.post(f"/api/requests/{r['id']}/offers", json={}, headers=auth(s))

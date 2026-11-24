@@ -78,7 +78,7 @@ export default function AdminAccounts() {
         ) : shown.length === 0 ? (
           <EmptyNote>No accounts match.</EmptyNote>
         ) : (
-          <div className="-mx-2 overflow-x-auto">
+          <div className="relative -mx-2 overflow-x-auto">
             <table className="w-full min-w-[820px] text-left text-[15px]">
               <thead>
                 <tr className="text-sm text-ink-soft">

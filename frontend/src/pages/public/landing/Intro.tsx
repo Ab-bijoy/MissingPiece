@@ -33,15 +33,15 @@ function Row({ hidden = false }: { hidden?: boolean }) {
 
 export default function Intro() {
   return (
-    <section className="bg-paper pt-4 pb-24">
+    <section id="about" className="scroll-mt-20 bg-paper pt-4 pb-24">
       <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
         <h2 className="font-display text-[clamp(2.4rem,5vw,4rem)] leading-none font-extrabold text-brand">
           Every project is missing something
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
           A club needs a projector. An NGO needs a hall and a trainer. A youth group needs snacks for 300 people.
-          MissingPiece puts those needs in front of the companies and neighbours who have them, and tracks every
-          promise until it actually arrives.
+          MissingPiece shows these needs to local companies and people who can help. Then it keeps track of every
+          promise until the help actually arrives.
         </p>
       </div>
 

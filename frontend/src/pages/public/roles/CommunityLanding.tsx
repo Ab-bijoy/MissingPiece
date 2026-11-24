@@ -37,7 +37,7 @@ const content: RoleContent = {
   eyebrow: 'For the community',
   headline: ['JOIN', 'IN,', 'PITCH', 'IN'],
   intro:
-    'Find programs near you. Come along as a participant, or offer what you know or own: a skill, a few hours, a sewing machine.',
+    'Find programs near you. Come along and take part, or help with something you know or have, like a skill, a few hours or a sewing machine.',
   primary: { label: 'Create a free account', to: '/signup' },
   secondary: { label: 'Log in', to: '/login' },
   features: [
@@ -54,12 +54,12 @@ const content: RoleContent = {
     {
       Icon: HandHelping,
       title: 'Offer to help',
-      body: 'Teach as a trainer, or help as a contributor with your time or things you own.',
+      body: 'Teach what you know, or help with your time or things you own.',
     },
     {
       Icon: Type,
       title: 'Easy to read',
-      body: 'Large, clear text and big buttons, with a Large text setting if you want it even bigger.',
+      body: 'Large, clear text and big buttons. You can make the text even bigger in your settings.',
     },
   ],
   stepsTitle: 'Getting involved is simple',
@@ -74,11 +74,11 @@ const content: RoleContent = {
     },
     {
       title: 'Join or help',
-      body: 'Join as a participant, or offer to help. Helpers wait for the organizer to say yes.',
+      body: 'Join to take part, or offer to help. If you offer to help, the organizer says yes first.',
     },
     {
       title: 'Follow along',
-      body: 'See everything you joined or offered on My contributions, with plain words like "Waiting" or "Approved".',
+      body: 'See everything you joined or offered in one place, with simple words like "Waiting" or "Approved".',
     },
   ],
   reviews: [
@@ -106,7 +106,7 @@ const content: RoleContent = {
     {
       Icon: MailCheck,
       title: 'Verify your email',
-      body: 'Type the 6-digit code we send you. It works for 10 minutes. If it does not arrive, you can ask for a new one.',
+      body: 'We’ll email you a 6-digit code. Enter it within 5 minutes, and if it doesn’t arrive, just ask for a new one.',
     },
     {
       Icon: UserRound,
@@ -121,12 +121,12 @@ const content: RoleContent = {
     {
       Icon: UserCheck,
       title: 'Helpers need approval',
-      body: 'Participants join right away. If you offer to help as a trainer or contributor, the organizer approves you first.',
+      body: 'If you join to take part, you are in right away. If you offer to help, the organizer says yes first.',
     },
     {
       Icon: Users,
       title: 'One place per event',
-      body: 'You can join each event once, either as a participant or as a helper.',
+      body: 'You can join each event once, either to take part or to help.',
     },
     {
       Icon: MessageCircleQuestion,
@@ -141,7 +141,7 @@ const content: RoleContent = {
     },
     {
       q: 'What is the difference between joining and helping?',
-      a: 'Joining as a participant means you take part in the event. Helping means you give something: you teach as a trainer, or contribute your time or things. Helpers are approved by the organizer.',
+      a: 'Joining means you come and take part in the event. Helping means you give something: you teach what you know, or give your time or things. The organizer says yes to helpers first.',
     },
     {
       q: 'I find small text hard to read. Can I make it bigger?',
@@ -153,7 +153,7 @@ const content: RoleContent = {
     },
     {
       q: 'Can I change my mind after offering to help?',
-      a: 'Yes. You can withdraw your offer any time before the organizer marks it as received.',
+      a: 'Yes. You can take back your offer any time before the organizer marks it as received.',
     },
     {
       q: 'How do I ask the organizer a question?',

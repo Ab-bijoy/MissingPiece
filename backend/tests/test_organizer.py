@@ -99,8 +99,8 @@ def test_request_offer_accept_and_benefits(client, f, db):
         "benefits": ["Logo on banner"],
         "conditions": None,
         "exclusive_category": None,
-        "decide_by": None,
-        "deliver_by": None,
+        "decide_by": str(date.today() + timedelta(days=2)),
+        "deliver_by": str(date.today() + timedelta(days=10)),
     }
     sent = client.post(f"/api/projects/{p['id']}/requests", json=body, headers=org)
     assert sent.status_code == 201, sent.text
@@ -165,8 +165,8 @@ def _request_body(need_id, sponsor_id):
         "benefits": ["Logo on banner"],
         "conditions": None,
         "exclusive_category": None,
-        "decide_by": None,
-        "deliver_by": None,
+        "decide_by": str(date.today() + timedelta(days=2)),
+        "deliver_by": str(date.today() + timedelta(days=10)),
     }
 
 
@@ -210,6 +210,33 @@ def test_sixth_sponsor_is_refused_with_the_screens_code(client, f):
     sixth = f.user(UserRole.sponsor, "Co 6")
     r = client.post(f"/api/projects/{p['id']}/requests", json=_request_body(money["id"], sixth.id), headers=org)
     assert r.status_code == 409 and r.json()["code"] == "request_limit"
+
+
+def test_request_dates_are_required_and_sensible(client, f):
+    """Decide by and Deliver by: both required, deliver not before decide, not in the past, not after the event."""
+    org = auth(f.user(UserRole.organizer, "Org"))
+    p = client.post("/api/projects", json=PROJECT, headers=org).json()
+    money = next(n for n in p["needs"] if n["type"] == "money")
+    sponsor = f.user(UserRole.sponsor, "Dates Co.")
+    url = f"/api/projects/{p['id']}/requests"
+    good = _request_body(money["id"], sponsor.id)
+    day = lambda n: str(date.today() + timedelta(days=n))  # noqa: E731
+
+    # Missing dates
+    for missing in ("decide_by", "deliver_by"):
+        body = {k: v for k, v in good.items() if k != missing}
+        assert client.post(url, json=body, headers=org).status_code == 422
+        assert client.post(url, json={**good, missing: None}, headers=org).status_code == 422
+    # Deliver before decide
+    assert client.post(url, json={**good, "decide_by": day(5), "deliver_by": day(3)}, headers=org).status_code == 422
+    # Decide by in the past (yesterday in Dhaka is always in the past)
+    r = client.post(url, json={**good, "decide_by": day(-2), "deliver_by": day(3)}, headers=org)
+    assert r.status_code == 422 and r.json()["code"] == "invalid_dates"
+    # Deliver by after the event (the project is 30 days away)
+    r = client.post(url, json={**good, "deliver_by": day(31)}, headers=org)
+    assert r.status_code == 422 and r.json()["code"] == "invalid_dates"
+    # Valid dates, deliver on the event day itself
+    assert client.post(url, json={**good, "deliver_by": day(30)}, headers=org).status_code == 201
 
 
 def test_sponsor_search(client, f):

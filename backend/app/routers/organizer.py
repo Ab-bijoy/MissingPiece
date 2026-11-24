@@ -65,6 +65,7 @@ from app.schemas.organizer import (
 )
 from app.services import contributors, loaders, matching
 from app.services import organizer_views as views
+from app.services.community import local_today
 from app.services.schedules import schedule_error
 
 # All paths start with /api, like every other router (the frontend calls /api/...)
@@ -629,6 +630,16 @@ def send_sponsor_request(project_id: uuid.UUID, payload: SponsorRequestCreateIn,
     need = db.get(Need, need_id)
     if not need or need.project_id != locked_project.id:
         raise ApiError(404, "Need not found for this project.", "not_found")
+
+    # The sponsor answers from today on, and delivers no later than the event itself (Dhaka dates)
+    if payload.decide_by < local_today():
+        raise ApiError(422, "Decide by cannot be in the past.", "invalid_dates")
+    if payload.deliver_by > locked_project.event_date:
+        raise ApiError(
+            422,
+            f"Deliver by must be on or before the event date ({locked_project.event_date:%d %b %Y}).",
+            "invalid_dates",
+        )
 
     check_not_duplicate(db, locked_project.id, need.id, sponsor_user.id)
     req_obj = SponsorRequest(

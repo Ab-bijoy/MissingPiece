@@ -13,6 +13,17 @@ export const SIGNUP_PATH: Record<Exclude<UserRole, 'admin'>, string> = {
   sponsor: '/sponsor/register',
 }
 
+/**
+ * Each role's public landing page: where the logo on that role's log-in and
+ * sign-up screens leads. Admins have no landing page of their own.
+ */
+export const LANDING_PATH: Record<UserRole, string> = {
+  general: '/community',
+  organizer: '/organizers',
+  sponsor: '/sponsors',
+  admin: '/',
+}
+
 /** Where each role lands after logging in (build prompt 9.1). */
 export const HOME_PATH: Record<UserRole, string> = {
   general: '/home',

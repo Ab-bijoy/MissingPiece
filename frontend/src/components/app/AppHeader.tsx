@@ -67,8 +67,9 @@ export default function AppHeader({ nav, profileTo }: { nav: AppNavItem[]; profi
 
   return (
     <header className="sticky top-0 z-40 bg-brand text-sand-light shadow-[0_1px_0_rgba(0,0,0,0.15)]">
-      <div className="mx-auto flex h-18 max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
-        <img src={logo} alt="MissingPiece" className="h-7 w-auto shrink-0 sm:h-8" />
+      <div className="mx-auto flex h-18 max-w-7xl items-center gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
+        {/* The logo may shrink on narrow phones so the buttons never push the page wider than the screen */}
+        <img src={logo} alt="MissingPiece" className="h-6 w-auto min-w-0 shrink object-contain object-left sm:h-8 sm:shrink-0" />
         <nav aria-label="Main" className="ml-4 hidden flex-1 lg:block">
           <ul className="flex items-center gap-1">
             {nav.map((item) => (
@@ -76,7 +77,7 @@ export default function AppHeader({ nav, profileTo }: { nav: AppNavItem[]; profi
             ))}
           </ul>
         </nav>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <NotificationBell />
           <div className="relative" ref={menuRef}>
             <button

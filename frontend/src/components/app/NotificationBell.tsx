@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { organizerApi, qk, useNotifications } from '../../api/organizer'
 import { timeAgo } from '../../lib/format'
 
@@ -9,7 +9,14 @@ export default function NotificationBell() {
   const { data = [] } = useNotifications()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
+  // On phones the panel spans the screen just below the bell (it would hang off the left edge otherwise)
+  const [panelTop, setPanelTop] = useState(80)
   const box = useRef<HTMLDivElement>(null)
+  const toggle = () => {
+    const bell = box.current?.getBoundingClientRect()
+    if (bell) setPanelTop(Math.round(bell.bottom + 8))
+    setOpen((v) => !v)
+  }
   const unread = data.filter((n) => !n.read).length
 
   const refresh = () => qc.invalidateQueries({ queryKey: qk.notifications })
@@ -32,7 +39,7 @@ export default function NotificationBell() {
     <div className="relative" ref={box}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-expanded={open}
         aria-label={unread ? `Notifications, ${unread} unread` : 'Notifications'}
         className="relative inline-flex size-11 items-center justify-center rounded-full text-sand-light hover:bg-white/10"
@@ -45,7 +52,10 @@ export default function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[min(92vw,380px)] overflow-hidden rounded-2xl border border-[#E2DED5] bg-white text-ink shadow-xl">
+        <div
+          style={{ '--panel-top': `${panelTop}px` } as CSSProperties}
+          className="z-50 overflow-hidden rounded-2xl border border-[#E2DED5] bg-white text-ink shadow-xl max-sm:fixed max-sm:inset-x-3 max-sm:top-(--panel-top) sm:absolute sm:right-0 sm:mt-2 sm:w-[380px]"
+        >
           <div className="flex items-center justify-between border-b border-[#E2DED5] px-4 py-3">
             <h2 className="font-bold">Notifications</h2>
             {unread > 0 && (
@@ -54,7 +64,7 @@ export default function NotificationBell() {
               </button>
             )}
           </div>
-          <ul className="max-h-[60vh] overflow-y-auto">
+          <ul className="max-h-[60vh] overflow-y-auto overscroll-contain">
             {data.length === 0 && <li className="px-4 py-6 text-center text-ink-soft">Nothing new yet.</li>}
             {data.map((n) => (
               <li key={n.id} className="border-b border-[#F0EDE6] last:border-0">

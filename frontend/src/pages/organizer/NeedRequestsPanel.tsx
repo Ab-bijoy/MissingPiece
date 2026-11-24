@@ -1,5 +1,5 @@
 import { MessageSquare, Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useMatches, useSentRequests, useSponsorSearch } from '../../api/organizer'
 import type { Project, SentRequestState } from '../../api/types'
@@ -32,7 +32,18 @@ function useDebounced(value: string, ms = 300) {
  * Opens under a need on the dashboard: the requests already sent for it (with a
  * link to each conversation) and a search over every sponsor on the platform.
  */
-export default function NeedRequestsPanel({ project, needId, needTitle }: { project: Project; needId: string; needTitle: string }) {
+export default function NeedRequestsPanel({
+  project,
+  needId,
+  needTitle,
+  actions,
+}: {
+  project: Project
+  needId: string
+  needTitle: string
+  /** The need's own buttons (schedule, remove), shown at the top of the panel */
+  actions?: ReactNode
+}) {
   const { data: requests, isPending } = useSentRequests(project.id)
   const { data: matches } = useMatches(project.id)
   const [q, setQ] = useState('')
@@ -48,6 +59,7 @@ export default function NeedRequestsPanel({ project, needId, needTitle }: { proj
 
   return (
     <div className="flex flex-col gap-4 rounded-xl bg-[#F8F6F1] p-4">
+      {actions}
       <section aria-label={`Requests sent for ${needTitle}`}>
         <h3 className="font-bold">Requests sent for {needTitle}</h3>
         {isPending ? (

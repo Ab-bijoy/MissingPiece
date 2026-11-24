@@ -7,7 +7,7 @@ import { DEMO_OTP } from '../../../api/mock/mockDb'
 import { useAuth } from '../../../auth/AuthProvider'
 import { authService } from '../../../auth/authService'
 import { pendingSignup, type PendingSignup } from '../../../auth/pendingSignup'
-import { HOME_PATH, SIGNUP_PATH } from '../../../auth/roles'
+import { HOME_PATH, LANDING_PATH, SIGNUP_PATH } from '../../../auth/roles'
 import Notice from '../../../components/ui/Notice'
 import OtpInput from '../../../components/ui/OtpInput'
 import { btn } from '../../../components/ui/buttons'
@@ -124,7 +124,7 @@ export default function VerifyEmailPage() {
 
   if (!pending) {
     return (
-      <AuthLayout centered>
+      <AuthLayout centered homeTo={remembered ? LANDING_PATH[remembered.role] : '/'}>
         <div className="flex flex-col items-center gap-5">
           <h1 className="text-[30px] font-bold">Please start again</h1>
           <p className="text-ink-soft">
@@ -144,7 +144,7 @@ export default function VerifyEmailPage() {
   const ss = String(seconds % 60).padStart(2, '0')
 
   return (
-    <AuthLayout width="wide" centered>
+    <AuthLayout width="wide" centered homeTo={remembered ? LANDING_PATH[remembered.role] : '/'}>
       <form onSubmit={onSubmit} className="flex flex-col items-center gap-5" noValidate>
         <span className="flex size-16 items-center justify-center rounded-full bg-[#E6F1EE]">
           <Mail className="size-8 text-accent" aria-hidden />
@@ -161,7 +161,7 @@ export default function VerifyEmailPage() {
         <button type="submit" className={`${btn.primary} w-full`} disabled={busy}>
           {busy ? 'Checking…' : 'Verify email'}
         </button>
-        <p className="text-[15px] text-ink-soft">The code works for 10 minutes.</p>
+        <p className="text-[15px] text-ink-soft">The code works for 5 minutes.</p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           {seconds > 0 ? (
             <span className="text-[#5A626B]" aria-live="polite">
