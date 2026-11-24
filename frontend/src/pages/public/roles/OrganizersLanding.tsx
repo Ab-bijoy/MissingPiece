@@ -48,12 +48,12 @@ const content: RoleContent = {
     {
       Icon: ClipboardList,
       title: 'Needs in your own units',
-      body: 'Write each need the way you would say it: money in taka, 300 snack packs, a projector for a day, 40 volunteer hours or a hall for one evening.',
+      body: 'List needs just as you’d say them: BDT 20,000 for prizes, 300 snack packs, a projector for one day or a hall for an evening.',
     },
     {
       Icon: Sparkles,
       title: 'Sponsor suggestions',
-      body: 'See companies that are a good match for your project, with a short reason for each. Only you can see how well each one matches.',
+      body: 'We point you to companies that are likely to say yes, and tell you why each one fits. The match scores stay private to you.',
     },
     {
       Icon: ListChecks,
@@ -91,7 +91,7 @@ const content: RoleContent = {
       quote:
         'The template filled in most of our workshop. We only changed the numbers and sent requests the same evening.',
       name: 'Rafiq',
-      role: 'Coordinator, community tailoring workshop',
+      role: 'Coordinator, tailoring workshop',
     },
     {
       quote:
@@ -106,7 +106,7 @@ const content: RoleContent = {
     {
       Icon: MailCheck,
       title: 'Verify your email',
-      body: 'After you sign up, type in the 6-digit code we email you. The code works for 10 minutes, and you can ask for a new one.',
+      body: 'We’ll email you a 6-digit code right after you sign up. Enter it within 5 minutes, or ask us to send a fresh one.',
     },
     {
       Icon: FileCheck2,

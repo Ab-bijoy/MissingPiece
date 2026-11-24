@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import PublicFooter from '../../../components/layout/PublicFooter'
-import PublicHeader from '../../../components/layout/PublicHeader'
+import PublicHeader, { type SectionLink } from '../../../components/layout/PublicHeader'
 import Audiences from './Audiences'
 import GetStarted from './GetStarted'
 import Hero from './Hero'
@@ -9,6 +9,14 @@ import HowItWorks from './HowItWorks'
 import Intro from './Intro'
 import Showcase from './Showcase'
 import { useScrollReveal } from '../../../lib/useScrollReveal'
+
+// The navbar links to the sections of this page, in the order they appear
+const SECTIONS: SectionLink[] = [
+  { id: 'about', label: 'About' },
+  { id: 'who-its-for', label: 'Who it’s for' },
+  { id: 'how-it-works', label: 'How it works' },
+  { id: 'get-started', label: 'Find your place' },
+]
 
 /** Main landing page for logged-out visitors. */
 export default function Landing() {
@@ -23,7 +31,7 @@ export default function Landing() {
 
   return (
     <>
-      <PublicHeader loginMenu />
+      <PublicHeader sections={SECTIONS} joinMenu />
       <main ref={main} className="landing-sections">
         <Hero />
         <Intro />

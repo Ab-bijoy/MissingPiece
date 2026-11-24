@@ -106,7 +106,7 @@ const content: RoleContent = {
     {
       Icon: MailCheck,
       title: 'Verify your email',
-      body: 'Type the 6-digit code we send you. It works for 10 minutes. If it does not arrive, you can ask for a new one.',
+      body: 'We’ll email you a 6-digit code. Enter it within 5 minutes, and if it doesn’t arrive, just ask for a new one.',
     },
     {
       Icon: UserRound,

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { UserRole } from '../../../api/types'
 import { authApi } from '../../../api/auth'
-import { LOGIN_PATH, ROLE_LABEL } from '../../../auth/roles'
+import { LANDING_PATH, LOGIN_PATH, ROLE_LABEL } from '../../../auth/roles'
 import { TextField } from '../../../components/ui/Field'
 import Notice from '../../../components/ui/Notice'
 import { btn } from '../../../components/ui/buttons'
@@ -41,7 +41,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthLayout>
+    <AuthLayout homeTo={LANDING_PATH[role]}>
       <form onSubmit={submit} className="flex flex-col gap-4.5" noValidate>
         <AuthHeading
           chip={ROLE_LABEL[role]}

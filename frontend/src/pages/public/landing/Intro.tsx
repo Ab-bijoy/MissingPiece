@@ -33,7 +33,7 @@ function Row({ hidden = false }: { hidden?: boolean }) {
 
 export default function Intro() {
   return (
-    <section className="bg-paper pt-4 pb-24">
+    <section id="about" className="scroll-mt-20 bg-paper pt-4 pb-24">
       <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
         <h2 className="font-display text-[clamp(2.4rem,5vw,4rem)] leading-none font-extrabold text-brand">
           Every project is missing something

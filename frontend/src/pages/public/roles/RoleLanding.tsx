@@ -168,14 +168,15 @@ function Reviews({ c }: { c: RoleContent }) {
             <li key={r.name} className="flex flex-col rounded-3xl bg-white p-8 shadow-sm ring-1 ring-black/5">
               <Quote className={`size-10 ${c.theme.quoteMark}`} aria-hidden />
               <blockquote className="mt-4 flex-1 text-lg leading-relaxed text-ink">“{r.quote}”</blockquote>
-              <div className="mt-8 flex items-center gap-4">
+              {/* Keep each role short enough for one line, so the names line up across the row */}
+              <div className="mt-8 flex items-start gap-4">
                 <span
                   className="inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-sand font-display text-xl font-extrabold text-brand"
                   aria-hidden
                 >
                   {r.name.charAt(0)}
                 </span>
-                <div>
+                <div className="pt-0.5">
                   <p className="font-bold text-deep">{r.name}</p>
                   <p className="text-[15px] text-ink-soft">{r.role}</p>
                 </div>
@@ -306,7 +307,7 @@ export default function RoleLanding({ content }: { content: RoleContent }) {
 
   return (
     <>
-      <PublicHeader sections={SECTIONS} loginTo={content.secondary.to} cta={content.primary} />
+      <PublicHeader sections={SECTIONS} logoTo="/" loginTo={content.secondary.to} cta={content.primary} />
       <main ref={main} className={`landing-sections ${content.theme.main}`}>
         <Hero c={content} />
         <Features c={content} />

@@ -10,26 +10,36 @@ const MAIN_NAV = [
   { to: '/community', label: 'Community' },
 ]
 
-/** One log-in page per kind of account (used by the main landing's Log in menu). */
-const LOGINS = [
-  { to: '/organizer/login', label: 'Organizer log in', hint: 'Clubs, NGOs and groups' },
-  { to: '/sponsor/login', label: 'Sponsor log in', hint: 'Companies and brands' },
-  { to: '/login', label: 'Member log in', hint: 'People joining programs' },
+/**
+ * The main landing's "Join us" menu: one landing page per kind of account.
+ * Each of those pages explains the role and has its own Register and Log in buttons.
+ */
+const JOIN_OPTIONS = [
+  { to: '/organizers', label: 'Join as an organizer', hint: 'Clubs, NGOs and groups' },
+  { to: '/sponsors', label: 'Join as a sponsor', hint: 'Companies and brands' },
+  { to: '/community', label: 'Join the community', hint: 'Take part in programs or help out' },
 ]
 
 export type SectionLink = { id: string; label: string }
 
 type Props = {
   /**
-   * Shows a "Log in" menu with every kind of account instead of a single
-   * Log in link (used on the main landing page, which serves everyone).
+   * Replaces Log in and the call-to-action button with one "Join us" menu that
+   * leads to the organizer, sponsor and community pages (used on the main
+   * landing page, which serves everyone).
    */
-  loginMenu?: boolean
+  joinMenu?: boolean
   /**
    * Page-only navigation. When set, the navbar lists only these sections of
    * the current page, and the logo scrolls to the top instead of leaving it.
    */
   sections?: SectionLink[]
+  /**
+   * Where the logo goes. Without it, the logo scrolls to the top on a page with
+   * `sections` (the main landing) and goes to the main landing everywhere else.
+   * The organizer, sponsor and community pages pass "/" so it leads home.
+   */
+  logoTo?: string
   /** Where Log in and Get started go. Defaults suit the main landing. */
   loginTo?: string
   cta?: { label: string; to: string }
@@ -88,8 +98,8 @@ function useScrolled(offset = 8) {
   return scrolled
 }
 
-/** "Log in" button that opens a small menu with one log-in page per account type. */
-function LoginMenu() {
+/** Coral "Join us" button that opens a small menu with the three ways to join. */
+function JoinMenu() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -111,18 +121,20 @@ function LoginMenu() {
       <button
         type="button"
         aria-expanded={open}
-        aria-controls="login-menu"
+        aria-controls="join-menu"
         onClick={() => setOpen((v) => !v)}
-        className={`${linkBase} gap-1 ${open ? linkActive : linkIdle}`}
+        className={`inline-flex min-h-11 items-center gap-1.5 rounded-full px-5 text-[15px] font-bold whitespace-nowrap text-ink shadow-sm transition-colors ${
+          open ? 'bg-sand' : 'bg-coral hover:bg-sand'
+        }`}
       >
-        Log in <ChevronDown className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
+        Join us <ChevronDown className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden />
       </button>
       {open && (
         <ul
-          id="login-menu"
-          className="absolute right-0 z-50 mt-2 w-64 origin-top-right overflow-hidden rounded-2xl bg-white p-1.5 text-ink shadow-xl ring-1 ring-black/10 motion-safe:animate-menu-in"
+          id="join-menu"
+          className="absolute right-0 z-50 mt-2 w-72 origin-top-right overflow-hidden rounded-2xl bg-white p-1.5 text-ink shadow-xl ring-1 ring-black/10 motion-safe:animate-menu-in"
         >
-          {LOGINS.map((l) => (
+          {JOIN_OPTIONS.map((l) => (
             <li key={l.to}>
               <Link
                 to={l.to}
@@ -152,8 +164,9 @@ function LoginMenu() {
 }
 
 export default function PublicHeader({
-  loginMenu = false,
+  joinMenu = false,
   sections,
+  logoTo,
   loginTo = '/login',
   cta = { label: 'Get started', to: '/#get-started' },
 }: Props) {
@@ -178,12 +191,12 @@ export default function PublicHeader({
       }`}
     >
       <div className="mx-auto flex h-18 max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
-        {pageOnly ? (
+        {pageOnly && !logoTo ? (
           <button type="button" onClick={toTop} className="shrink-0" aria-label="Back to top">
             {logoImg}
           </button>
         ) : (
-          <Link to="/" className="shrink-0" aria-label="MissingPiece home">
+          <Link to={logoTo ?? '/'} className="shrink-0" aria-label="MissingPiece home">
             {logoImg}
           </Link>
         )}
@@ -217,19 +230,21 @@ export default function PublicHeader({
         </nav>
 
         <div className={`ml-auto items-center gap-2 lg:ml-0 ${bp.showFlex}`}>
-          {loginMenu ? (
-            <LoginMenu />
+          {joinMenu ? (
+            <JoinMenu />
           ) : (
-            <Link to={loginTo} className={`${linkBase} ${linkIdle}`}>
-              Log in
-            </Link>
+            <>
+              <Link to={loginTo} className={`${linkBase} ${linkIdle}`}>
+                Log in
+              </Link>
+              <Link
+                to={cta.to}
+                className="inline-flex min-h-11 items-center rounded-full bg-coral px-5 text-[15px] font-bold whitespace-nowrap text-ink shadow-sm transition-colors hover:bg-sand"
+              >
+                {cta.label}
+              </Link>
+            </>
           )}
-          <Link
-            to={cta.to}
-            className="inline-flex min-h-11 items-center rounded-full bg-coral px-5 text-[15px] font-bold whitespace-nowrap text-ink shadow-sm transition-colors hover:bg-sand"
-          >
-            {cta.label}
-          </Link>
         </div>
 
         <button
@@ -275,26 +290,29 @@ export default function PublicHeader({
                   </li>
                 ))}
           </ul>
-          {loginMenu && (
-            <div className="mb-4 border-t border-white/10 pt-3">
-              <p className="pb-1 text-sm font-bold tracking-wider text-sand uppercase">Log in</p>
-              <ul className="grid gap-1">
-                {LOGINS.map((l) => (
+          {joinMenu ? (
+            <div className="border-t border-white/10 pt-3">
+              <p className="pb-2 text-sm font-bold tracking-wider text-sand uppercase">Join us</p>
+              <ul className="grid gap-2">
+                {JOIN_OPTIONS.map((l) => (
                   <li key={l.to}>
                     <Link
                       to={l.to}
                       onClick={() => setOpen(false)}
-                      className="flex min-h-12 items-center text-lg font-bold text-sand-light"
+                      className="flex min-h-14 items-center justify-between gap-3 rounded-2xl bg-white/10 px-4 py-2 hover:bg-white/15"
                     >
-                      {l.label}
+                      <span className="flex flex-col">
+                        <span className="text-lg font-bold text-white">{l.label}</span>
+                        <span className="text-sm text-sand-light/80">{l.hint}</span>
+                      </span>
+                      <ArrowRight className="size-5 shrink-0 text-coral" aria-hidden />
                     </Link>
                   </li>
                 ))}
               </ul>
             </div>
-          )}
-          <div className="flex gap-3">
-            {!loginMenu && (
+          ) : (
+            <div className="flex gap-3">
               <Link
                 to={loginTo}
                 onClick={() => setOpen(false)}
@@ -302,15 +320,15 @@ export default function PublicHeader({
               >
                 Log in
               </Link>
-            )}
-            <Link
-              to={cta.to}
-              onClick={() => setOpen(false)}
-              className="inline-flex min-h-14 flex-1 items-center justify-center rounded-full bg-coral text-center font-bold text-ink"
-            >
-              {cta.label}
-            </Link>
-          </div>
+              <Link
+                to={cta.to}
+                onClick={() => setOpen(false)}
+                className="inline-flex min-h-14 flex-1 items-center justify-center rounded-full bg-coral text-center font-bold text-ink"
+              >
+                {cta.label}
+              </Link>
+            </div>
+          )}
         </nav>
       )}
     </header>

@@ -1,7 +1,7 @@
 const STEPS = [
   {
     title: 'List what you need',
-    body: 'Write down what your project is missing, like money, items, skills, volunteer time or a place, in amounts like packs or hours.',
+    body: 'Write down everything your event still needs, from prize money and snacks to a projector, a hall or a few volunteers.',
   },
   {
     title: 'Ask the right sponsors',
@@ -9,11 +9,11 @@ const STEPS = [
   },
   {
     title: 'Track every offer',
-    body: 'Watch each offer go from offered, to accepted, to received. A sponsor always gives the full amount for a need, never just part of it.',
+    body: 'Every offer shows where it stands, from promised to delivered. Sponsors always cover a whole need, so nothing is left half done.',
   },
   {
     title: 'Close it out',
-    body: 'When everything has arrived, mark the project as done. Sponsors get a short report with the totals. Nobody’s personal details are shared.',
+    body: 'Once everything has arrived, close the project. Sponsors get a short thank-you report with the totals, never anyone’s personal details.',
   },
 ]
 
