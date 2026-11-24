@@ -188,8 +188,16 @@ class SponsorRequestCreateIn(BaseModel):
     benefits: list[str] = Field(default_factory=list)
     conditions: str | None = Field(default=None, max_length=2000)
     exclusive_category: str | None = Field(default=None, max_length=60)
-    decide_by: date | None = None
-    deliver_by: date | None = None
+    # Both dates are required: the sponsor needs to know when to answer and when to deliver.
+    # The router also checks them against today and the event date.
+    decide_by: date
+    deliver_by: date
+
+    @model_validator(mode="after")
+    def deliver_after_decide(self):
+        if self.deliver_by < self.decide_by:
+            raise ValueError("Deliver by must be on or after Decide by.")
+        return self
 
 
 class SponsorRequestOut(Schema):

@@ -5,7 +5,8 @@ import type { Project } from '../../api/types'
 import { Modal, smallBtn } from '../../components/app/ui'
 import { TextField } from '../../components/ui/Field'
 import Notice from '../../components/ui/Notice'
-import { qtyText } from '../../lib/format'
+import { formatDate, qtyText } from '../../lib/format'
+import { dhakaToday } from '../../lib/programDates'
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Please try again.')
 
@@ -32,6 +33,10 @@ export default function SendRequestDialog({
   const [exclusive, setExclusive] = useState('')
   const [decideBy, setDecideBy] = useState('')
   const [deliverBy, setDeliverBy] = useState('')
+  const [dateErrors, setDateErrors] = useState<{ decide?: string; deliver?: string }>({})
+  // Dates are Bangladesh calendar dates: from today up to the event itself
+  const today = dhakaToday()
+  const eventDate = project.event_date
   const send = useProjectAction(project.id, () =>
     organizerApi.sendRequest(project.id, {
       need_id: needId || openNeeds[0]!.id,
@@ -39,19 +44,33 @@ export default function SendRequestDialog({
       benefits: benefits.split('\n').map((s) => s.trim()).filter(Boolean),
       conditions: conditions.trim() || null,
       exclusive_category: exclusive.trim() || null,
-      decide_by: decideBy || null,
-      deliver_by: deliverBy || null,
+      decide_by: decideBy,
+      deliver_by: deliverBy,
     }),
   )
 
+  /** The same rules the server checks, shown next to the fields before anything is sent. */
+  const checkDates = () => {
+    const errs: { decide?: string; deliver?: string } = {}
+    if (!decideBy) errs.decide = 'Choose the date the sponsor should answer by.'
+    else if (decideBy < today) errs.decide = 'This date has already passed.'
+    else if (decideBy > eventDate) errs.decide = `Choose a date on or before the event (${formatDate(eventDate)}).`
+    if (!deliverBy) errs.deliver = 'Choose the date the sponsor should deliver by.'
+    else if (decideBy && deliverBy < decideBy) errs.deliver = 'Delivery must be on or after the Decide by date.'
+    else if (deliverBy > eventDate) errs.deliver = `Choose a date on or before the event (${formatDate(eventDate)}).`
+    setDateErrors(errs)
+    return !errs.decide && !errs.deliver
+  }
+
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (!checkDates()) return
     send.mutate(undefined, { onSuccess: onClose })
   }
 
   return (
     <Modal open={!!match} onClose={onClose} title={`Send a request to ${match?.sponsor_name ?? ''}`}>
-      <form onSubmit={submit} className="flex flex-col gap-4">
+      <form onSubmit={submit} noValidate className="flex flex-col gap-4">
         {send.isError && (
           <Notice tone="error">
             {send.error instanceof ApiError && send.error.code === 'request_limit'
@@ -91,8 +110,28 @@ export default function SendRequestDialog({
           hint="Optional. For example food, if this sponsor would be the only food sponsor."
         />
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextField label="Decide by" type="date" value={decideBy} onChange={(e) => setDecideBy(e.target.value)} />
-          <TextField label="Deliver by" type="date" value={deliverBy} onChange={(e) => setDeliverBy(e.target.value)} />
+          <TextField
+            label="Decide by"
+            type="date"
+            required
+            min={today}
+            max={eventDate}
+            value={decideBy}
+            onChange={(e) => setDecideBy(e.target.value)}
+            hint="When the sponsor should answer"
+            error={dateErrors.decide}
+          />
+          <TextField
+            label="Deliver by"
+            type="date"
+            required
+            min={decideBy || today}
+            max={eventDate}
+            value={deliverBy}
+            onChange={(e) => setDeliverBy(e.target.value)}
+            hint={`By the event at the latest (${formatDate(eventDate)})`}
+            error={dateErrors.deliver}
+          />
         </div>
         <p className="text-[15px] text-ink-soft">Sending opens a message thread with this sponsor. They never see the match score.</p>
         <div className="flex justify-end gap-2">
