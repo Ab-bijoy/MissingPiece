@@ -16,6 +16,8 @@ import {
 import type { GapRow, Need, Offer, OfferConflict, Project, SponsorMatch } from '../../api/types'
 import { Card, EmptyNote, Modal, Pill, smallBtn, Spinner } from '../../components/app/ui'
 import Notice from '../../components/ui/Notice'
+import { TextField } from '../../components/ui/Field'
+import { CONTRIBUTOR_TYPES, fromDhakaInput, toDhakaInput, scheduleIssue } from '../../lib/needSchedule'
 import { formatDate, NEED_TYPE_LABEL, needAmount, qtyText, slotText } from '../../lib/format'
 import NeedFields, { emptyDraft, needErrors, needFromDraft } from './NeedFields'
 import NeedRequestsPanel from './NeedRequestsPanel'
@@ -157,6 +159,7 @@ function NeedsCard({ projectId }: { projectId: string }) {
   const remove = useProjectAction(projectId, (needId: string) => organizerApi.deleteNeed(needId))
   // The need whose requests panel is open (one at a time)
   const [openNeed, setOpenNeed] = useState<string | null>(null)
+  const [scheduling, setScheduling] = useState<Need | null>(null)
 
   return (
     <Card title="Needs" aside={<span className="text-[15px] text-ink-soft">Each need keeps its own unit</span>}>
@@ -187,7 +190,11 @@ function NeedsCard({ projectId }: { projectId: string }) {
                   return (
                     <Fragment key={r.need_id}>
                     <tr className="border-t border-[#F0EDE6]">
-                      <td className="px-2 py-3 font-bold">{r.title}</td>
+                      <td className="px-2 py-3 font-bold">{r.title}
+                        {n && CONTRIBUTOR_TYPES.includes(n.type) && r.state === 'open' && scheduleIssue(n.slot_start, n.slot_end) && (
+                          <p className="mt-1 text-sm font-normal text-warning">{scheduleIssue(n.slot_start, n.slot_end) === 'ended' ? 'Schedule ended. Update it to accept contributors.' : 'Schedule required before contributors can apply.'}</p>
+                        )}
+                      </td>
                       <td className="px-2 py-3">{NEED_TYPE_LABEL[r.type]}</td>
                       <td className="px-2 py-3">{n ? needAmount(n) : qtyText(r)}</td>
                       <td className="px-2 py-3">{gapPill(r)}</td>
@@ -207,6 +214,11 @@ function NeedsCard({ projectId }: { projectId: string }) {
                         </button>
                       </td>
                       <td className="px-2 py-3 text-right">
+                        {n && r.state === 'open' && CONTRIBUTOR_TYPES.includes(n.type) && (
+                          <button type="button" className="min-h-11 px-2 font-bold text-accent underline" onClick={() => setScheduling(n)}>
+                            {scheduleIssue(n.slot_start, n.slot_end) ? 'Set schedule' : 'Edit schedule'}<span className="sr-only"> for {n.title}</span>
+                          </button>
+                        )}
                         {r.state === 'open' && r.note === 'No requests yet' && (
                           <button
                             type="button"
@@ -238,8 +250,32 @@ function NeedsCard({ projectId }: { projectId: string }) {
           </p>
         </>
       )}
+      {scheduling && <NeedScheduleDialog key={scheduling.id} need={scheduling} projectId={projectId} onClose={() => setScheduling(null)} />}
     </Card>
   )
+}
+
+function NeedScheduleDialog({ need, projectId, onClose }: { need: Need; projectId: string; onClose: () => void }) {
+  const [start, setStart] = useState(toDhakaInput(need.slot_start))
+  const [end, setEnd] = useState(toDhakaInput(need.slot_end))
+  const [error, setError] = useState('')
+  const save = useProjectAction(projectId, () => organizerApi.updateNeed(need.id, { slot_start: fromDhakaInput(start), slot_end: fromDhakaInput(end) }))
+  return <Modal open title={`Schedule: ${need.title}`} onClose={onClose}>
+    <form className="flex flex-col gap-4" onSubmit={(e) => {
+      e.preventDefault()
+      const issue = scheduleIssue(fromDhakaInput(start), fromDhakaInput(end))
+      if (issue) { setError(issue === 'missing' ? 'Set both start and end times.' : issue === 'ended' ? 'The end time must be in the future.' : 'The end must be after the start. Use the next date for overnight sessions.'); return }
+      setError('')
+      save.mutate(undefined, { onSuccess: onClose })
+    }}>
+      <p>Set the hours when contributors are needed. All times are Bangladesh time (UTC+06:00).</p>
+      <TextField label="Start time" type="datetime-local" required value={start} onChange={(e) => setStart(e.target.value)} />
+      <TextField label="End time" type="datetime-local" required value={end} onChange={(e) => setEnd(e.target.value)} />
+      {error && <Notice tone="error">{error}</Notice>}
+      {save.isError && <Notice tone="error">{errText(save.error)}</Notice>}
+      <button type="submit" className={smallBtn.primary} disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save schedule'}</button>
+    </form>
+  </Modal>
 }
 
 function OfferCard({ o, onAccept, onDecline, busy }: { o: Offer; onAccept: () => void; onDecline: () => void; busy: boolean }) {

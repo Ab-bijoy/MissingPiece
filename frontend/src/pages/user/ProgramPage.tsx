@@ -7,6 +7,7 @@ import Notice from '../../components/ui/Notice'
 import { SkeletonList } from '../../components/ui/Skeleton'
 import { formatDate, slotText, timeAgo } from '../../lib/format'
 import { acceptsApplications, programEnded, useDhakaToday } from '../../lib/programDates'
+import { scheduleIssue } from '../../lib/needSchedule'
 import LeaveProgramButton from './LeaveProgramButton'
 import { card, Cover, DateBadge, membershipStatus, ubtn } from './bits'
 import { CommentBubble } from './UserHome'
@@ -319,7 +320,8 @@ function Contribute({ p }: { p: ProgramDetail }) {
   const seatFree = p.seats_left > 0
   const [way, setWay] = useState<Way>(switching || !seatFree ? 'contributor' : 'participant')
   const [needId, setNeedId] = useState('')
-  const selected = options.find((n) => n.id === needId) ?? options[0]
+  const selected = options.find((n) => n.id === needId) ?? options.find((n) => !scheduleIssue(n.slot_start, n.slot_end)) ?? options[0]
+  const scheduleProblem = selected ? scheduleIssue(selected.slot_start, selected.slot_end) : null
 
   const joinAsParticipant = useUserAction(
     () => userApi.join(p.id, { role: 'participant' }),
@@ -338,7 +340,7 @@ function Contribute({ p }: { p: ProgramDetail }) {
     () => refreshAfter.join(p.id),
   )
   const action = way === 'participant' ? joinAsParticipant : applyAsContributor
-  const blocked = way === 'participant' ? switching || !seatFree : !selected
+  const blocked = way === 'participant' ? switching || !seatFree : !selected || !!scheduleProblem
   const label =
     way === 'participant'
       ? switching
@@ -346,6 +348,8 @@ function Contribute({ p }: { p: ProgramDetail }) {
         : seatFree
           ? 'Join as participant'
           : 'Program is full'
+      : scheduleProblem
+        ? scheduleProblem === 'ended' ? 'Contribution time has ended' : 'Waiting for organizer schedule'
       : switching
         ? 'Switch to contributing and release my seat'
         : 'Apply as contributor'
@@ -407,17 +411,23 @@ function Contribute({ p }: { p: ProgramDetail }) {
                 What you can help with
                 <select
                   value={selected?.id ?? ''}
-                  onChange={(e) => setNeedId(e.target.value)}
+                  onChange={(e) => { setNeedId(e.target.value); applyAsContributor.reset() }}
                   className="mt-1.5 block min-h-12 w-full rounded-xl border border-black/15 bg-white px-3 font-normal"
                 >
                   {options.map((n) => (
                     <option key={n.id} value={n.id}>
                       {n.title}
+                      {scheduleIssue(n.slot_start, n.slot_end) ? ' — schedule unavailable' : ''}
                       {slotText(n.slot_start, n.slot_end) ? `, ${slotText(n.slot_start, n.slot_end)}` : ''}
                     </option>
                   ))}
                 </select>
               </label>
+              {selected && scheduleProblem && <Notice>
+                {scheduleProblem === 'ended'
+                  ? `The scheduled time for ${selected.title} has ended. The organizer must update it before you can apply.`
+                  : `The organizer has not set a valid start and end time for ${selected.title}. Applications are paused until they add a schedule.`}
+              </Notice>}
             </>
           )}
 

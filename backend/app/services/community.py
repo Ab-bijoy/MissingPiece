@@ -20,6 +20,7 @@ from app.models.enums import (
 )
 from app.services import loaders
 from app.services.notifications import notify
+from app.services.schedules import schedule_error
 from app.services.views import holding_offer, need_phrase, qty_text
 
 
@@ -159,6 +160,12 @@ def join(db, user, project_id, body):
         n = db.scalar(select(Need).where(Need.id == body.need_id, Need.project_id == p.id).with_for_update())
         if not n or n.type not in (NeedType.skill, NeedType.time, NeedType.equipment, NeedType.space):
             raise ApiError(422, "Choose an eligible contribution need.", "invalid_need")
+        if schedule_error(n.type, n.slot_start, n.slot_end):
+            raise ApiError(
+                409,
+                "The organizer must set a valid start and end time for this need before you can apply.",
+                "need_schedule_unavailable",
+            )
         if holding_offer(db, n.id) or (n.deadline and n.deadline < local_today()):
             raise ApiError(409, "This need is no longer open.", "need_covered")
         if body.contribution_role == "trainer" and n.type != NeedType.skill:

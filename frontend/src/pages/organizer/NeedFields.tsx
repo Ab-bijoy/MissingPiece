@@ -1,6 +1,7 @@
 import type { NeedInput, NeedType } from '../../api/types'
 import { SelectField, TextField } from '../../components/ui/Field'
 import { NEED_TYPE_LABEL } from '../../lib/format'
+import { CONTRIBUTOR_TYPES, fromDhakaInput, toDhakaInput, scheduleIssue } from '../../lib/needSchedule'
 
 /** Form state for one need. Numbers stay strings while typing. */
 export type NeedDraft = {
@@ -15,11 +16,11 @@ export type NeedDraft = {
   deadline: string
 }
 
-const BOOKABLE: NeedType[] = ['skill', 'time', 'equipment', 'space']
+const BOOKABLE = CONTRIBUTOR_TYPES
 
 // datetime-local works in local wall time; we store Bangladesh time (+06:00).
-const toLocal = (iso?: string | null) => (iso ? iso.slice(0, 16) : '')
-const fromLocal = (v: string) => (v ? `${v}:00+06:00` : null)
+const toLocal = toDhakaInput
+const fromLocal = fromDhakaInput
 
 export const draftFromNeed = (n: NeedInput): NeedDraft => ({
   key: crypto.randomUUID(),
@@ -37,13 +38,20 @@ export const emptyDraft = (): NeedDraft =>
   draftFromNeed({ type: 'product', title: '', quantity: 1, unit: '' })
 
 /** Checks a need the same way the back end does. Returns field errors. */
-export function needErrors(d: NeedDraft): Record<string, string> {
+export function needErrors(d: NeedDraft, withTimes = true): Record<string, string> {
   const e: Record<string, string> = {}
   if (!d.title.trim()) e.title = 'Give the need a name.'
   if (!(Number(d.quantity) > 0)) e.quantity = 'Must be more than 0.'
   if (d.type !== 'money' && !d.unit.trim()) e.unit = 'Say the unit, for example packs or hours.'
   if (d.type === 'money' && !d.budget_item.trim()) e.budget_item = 'Money needs a budget item.'
-  if (d.slot_start && d.slot_end && d.slot_end <= d.slot_start)
+  if (withTimes && BOOKABLE.includes(d.type)) {
+    if (!d.slot_start) e.slot_start = 'Set the contribution start time.'
+    if (!d.slot_end) e.slot_end = 'Set the contribution end time.'
+    const issue = scheduleIssue(fromLocal(d.slot_start), fromLocal(d.slot_end))
+    if (issue === 'invalid') e.slot_end = 'Enter valid times, with the end after the start.'
+    if (issue === 'ended') e.slot_end = 'The end time must be in the future.'
+  }
+  if (withTimes && BOOKABLE.includes(d.type) && d.slot_start && d.slot_end && d.slot_end <= d.slot_start)
     // Same day but an earlier hour (for example 10:25 PM to 04:23 AM): say what to change
     e.slot_end =
       d.slot_end.slice(0, 10) === d.slot_start.slice(0, 10)
@@ -117,8 +125,8 @@ export default function NeedFields({
       )}
       {bookable && (
         <>
-          <TextField label="From" type="datetime-local" value={value.slot_start} onChange={(e) => set('slot_start', e.target.value)} hint="Optional" />
-          <TextField label="To" type="datetime-local" value={value.slot_end} onChange={(e) => set('slot_end', e.target.value)} error={errors.slot_end} />
+          <TextField label="From (required)" type="datetime-local" required value={value.slot_start} onChange={(e) => set('slot_start', e.target.value)} error={errors.slot_start} hint="Bangladesh time (UTC+06:00)" />
+          <TextField label="To (required)" type="datetime-local" required value={value.slot_end} onChange={(e) => set('slot_end', e.target.value)} error={errors.slot_end} hint="Use the next date if the session ends after midnight." />
         </>
       )}
       {withTimes && (

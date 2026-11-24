@@ -20,7 +20,14 @@ PROJECT = {
     "institution": None,
     "needs": [
         {"type": "money", "title": "Prize fund", "quantity": 20000, "unit": "kg", "budget_item": "Prizes"},
-        {"type": "skill", "title": "Trainers", "quantity": 3, "unit": "trainers"},
+        {
+            "type": "skill",
+            "title": "Trainers",
+            "quantity": 3,
+            "unit": "trainers",
+            "slot_start": f"{date.today() + timedelta(days=30)}T10:00:00+06:00",
+            "slot_end": f"{date.today() + timedelta(days=30)}T12:00:00+06:00",
+        },
     ],
 }
 

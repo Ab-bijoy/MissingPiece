@@ -10,6 +10,7 @@ from app.models import Booking, EventMembership, Need, Offer, Project
 from app.models.enums import MembershipRole, MembershipStatus, NeedStatus, NotificationType, OfferStage, ProjectStatus
 from app.services.community import local_today
 from app.services.notifications import notify
+from app.services.schedules import schedule_error
 
 
 def decide(db, user, membership_id, approve):
@@ -100,6 +101,14 @@ def _decide(db, user, membership_id, approve):
             raise ApiError(409, "This program is no longer accepting contributions.", "closed")
         if not o.slot_start or not o.slot_end or o.slot_end <= datetime.now(UTC):
             raise ApiError(409, "The contribution time slot is missing or has ended.", "invalid_slot")
+        if schedule_error(need.type, need.slot_start, need.slot_end):
+            raise ApiError(409, "Set a valid need schedule before approving contributors.", "invalid_slot")
+        if o.slot_start < need.slot_start or o.slot_end > need.slot_end:
+            raise ApiError(
+                409,
+                "This application's time no longer fits the need schedule. Ask the contributor to reapply.",
+                "invalid_slot",
+            )
         if o.stage == OfferStage.offered:
             if need.status != NeedStatus.open or any(
                 other.stage in (OfferStage.accepted, OfferStage.received) for other in offers

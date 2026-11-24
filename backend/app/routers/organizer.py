@@ -65,6 +65,7 @@ from app.schemas.organizer import (
 )
 from app.services import contributors, loaders, matching
 from app.services import organizer_views as views
+from app.services.schedules import schedule_error
 
 # All paths start with /api, like every other router (the frontend calls /api/...)
 router = APIRouter(prefix="/api", tags=["organizer"])
@@ -281,6 +282,9 @@ def publish_project(project_id: uuid.UUID, user: Organizer, db: DB):
     project = _get_owned_project(db, project_id, user.id)
     if project.status != ProjectStatus.draft:
         raise ApiError(400, "Only draft projects can be published.", "invalid_state")
+    for need in project.needs:
+        if error := schedule_error(need.type, need.slot_start, need.slot_end):
+            raise ApiError(422, f"{need.title}: {error}", "invalid_need_schedule")
     project.status = ProjectStatus.live
     # AI generation is explicit: publishing must not depend on provider uptime.
     db.commit()
@@ -347,10 +351,19 @@ def add_project_need(project_id: uuid.UUID, payload: NeedCreateIn, user: Organiz
 def update_need(need_id: uuid.UUID, payload: NeedUpdateIn, user: Organizer, db: DB):
     _require_organizer(user)
     need = _get_owned_need(db, need_id, user.id)
+    # Do not change the schedule concurrently with accepting a contributor.
+    need = db.scalar(select(Need).where(Need.id == need.id).with_for_update().execution_options(populate_existing=True))
     if need.status != NeedStatus.open:
         raise ApiError(400, "Only open needs can be edited.", "need_not_open")
 
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    changes = payload.model_dump(exclude_unset=True)
+    if error := schedule_error(
+        changes.get("type", need.type),
+        changes.get("slot_start", need.slot_start),
+        changes.get("slot_end", need.slot_end),
+    ):
+        raise ApiError(422, error, "invalid_need_schedule")
+    for field, value in changes.items():
         setattr(need, field, value)
     if need.type == NeedType.money:
         need.unit = "BDT"  # the amount is in BDT; no separate unit for money

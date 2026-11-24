@@ -86,7 +86,7 @@ function TemplateEditor({ template, onClose }: { template: Template | null; onCl
     e.preventDefault()
     const ne: Record<string, Record<string, string>> = {}
     needs.forEach((n) => {
-      const x = needErrors(n)
+      const x = needErrors(n, false)
       if (Object.keys(x).length) ne[n.key] = x
     })
     setErrs(ne)

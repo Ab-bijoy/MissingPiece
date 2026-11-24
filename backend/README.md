@@ -2,6 +2,23 @@
 
 ## Community API
 
+### Required contributor schedules
+
+Skill, time, equipment and space needs require timezone-aware start/end times,
+with the end after the start and still in the future. Creation, adding needs,
+merged PATCH updates and publishing enforce this. Date-free templates remain
+reusable; their copied draft needs must be scheduled before publishing.
+
+Organizers repair existing open needs from **Needs → Set schedule** (or edit
+an existing schedule). The editor displays Bangladesh time even when the server
+returns UTC. Unscheduled/invalid/ended needs remain visible to general users,
+but the application button explains why it is unavailable. The join endpoint
+also refuses these needs, including requests that try to supply their own times.
+Valid applications inherit the organizer's schedule. Updating a need does not
+silently change an applicant's offered hours; incompatible applications must be
+submitted again before approval. No dates are invented for existing records and
+no database migration is required.
+
 ### Contributor approval
 
 The organizer dashboard shows **Contributor applications** above its other panels.

@@ -3,10 +3,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from app.models.enums import NeedType
 from app.schemas.common import EventFacts, NeedOut, Num, OfferOut, Schema
+from app.services.schedules import schedule_error
 
 
 class DefaultNeedSpec(BaseModel):
@@ -33,12 +34,14 @@ class NeedCreateIn(BaseModel):
     # For money the amount is in BDT, so the unit is not asked for (always "BDT")
     unit: str = Field(default="", max_length=60)
     budget_item: str | None = Field(default=None, max_length=120)
-    slot_start: datetime | None = None
-    slot_end: datetime | None = None
+    slot_start: AwareDatetime | None = None
+    slot_end: AwareDatetime | None = None
     deadline: date | None = None
 
     @model_validator(mode="after")
     def money_is_in_bdt(self):
+        if error := schedule_error(self.type, self.slot_start, self.slot_end):
+            raise ValueError(error)
         if self.type == NeedType.money:
             self.unit = "BDT"
         elif not self.unit.strip():
@@ -98,8 +101,8 @@ class NeedUpdateIn(BaseModel):
     quantity: Decimal | None = Field(default=None, gt=0)
     unit: str | None = Field(default=None, min_length=1, max_length=60)
     budget_item: str | None = Field(default=None, max_length=120)
-    slot_start: datetime | None = None
-    slot_end: datetime | None = None
+    slot_start: AwareDatetime | None = None
+    slot_end: AwareDatetime | None = None
     deadline: date | None = None
 
 
