@@ -38,6 +38,7 @@ const CARDS: Card[] = [
     cta: 'Create an account',
     to: '/signup',
     login: '/login',
+    note: 'It is free, and you can join a program straight away.',
   },
 ]
 

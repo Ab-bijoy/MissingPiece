@@ -23,7 +23,7 @@ export default function Landing() {
 
   return (
     <>
-      <PublicHeader hideLogin />
+      <PublicHeader loginMenu />
       <main ref={main} className="landing-sections">
         <Hero />
         <Intro />

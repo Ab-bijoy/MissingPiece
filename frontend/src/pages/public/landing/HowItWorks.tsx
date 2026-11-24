@@ -1,11 +1,11 @@
 const STEPS = [
   {
     title: 'List what you need',
-    body: 'Write down what your project is missing: money, items, skills, volunteer time, equipment or a place. Use the amounts you already use, like taka, packs, hours or one evening in a hall.',
+    body: 'Write down what your project is missing, like money, items, skills, volunteer time or a place, in amounts like packs or hours.',
   },
   {
     title: 'Ask the right sponsors',
-    body: 'We suggest companies that are a good match and tell you why. You can send a request to up to five of them.',
+    body: 'We suggest companies that are a good match for your project and tell you why. Then send a request to up to five of them.',
   },
   {
     title: 'Track every offer',
