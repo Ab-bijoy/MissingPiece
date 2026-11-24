@@ -40,8 +40,8 @@ export default function Intro() {
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft">
           A club needs a projector. An NGO needs a hall and a trainer. A youth group needs snacks for 300 people.
-          MissingPiece puts those needs in front of the companies and neighbours who have them, and tracks every
-          promise until it actually arrives.
+          MissingPiece shows these needs to local companies and people who can help. Then it keeps track of every
+          promise until the help actually arrives.
         </p>
       </div>
 

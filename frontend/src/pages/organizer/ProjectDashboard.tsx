@@ -1,4 +1,4 @@
-import { ChevronDown, CircleCheck, Clock3, Plus, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'
+import { ChevronDown, CircleCheck, Clock3, Plus, RefreshCw, Sparkles, Trash2, TriangleAlert } from 'lucide-react'
 import { Fragment, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -15,6 +15,7 @@ import {
 } from '../../api/organizer'
 import type { GapRow, Need, Offer, OfferConflict, Project, SponsorMatch } from '../../api/types'
 import { Card, EmptyNote, Modal, Pill, smallBtn, Spinner } from '../../components/app/ui'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import Notice from '../../components/ui/Notice'
 import { TextField } from '../../components/ui/Field'
 import { CONTRIBUTOR_TYPES, fromDhakaInput, toDhakaInput, scheduleIssue } from '../../lib/needSchedule'
@@ -160,6 +161,7 @@ function NeedsCard({ projectId }: { projectId: string }) {
   // The need whose requests panel is open (one at a time)
   const [openNeed, setOpenNeed] = useState<string | null>(null)
   const [scheduling, setScheduling] = useState<Need | null>(null)
+  const [removing, setRemoving] = useState<{ id: string; title: string } | null>(null)
 
   return (
     <Card title="Needs" aside={<span className="text-[15px] text-ink-soft">Each need keeps its own unit</span>}>
@@ -169,81 +171,115 @@ function NeedsCard({ projectId }: { projectId: string }) {
         <EmptyNote>No needs yet. Use “Add a need” to list what this project needs.</EmptyNote>
       ) : (
         <>
-          <div className="-mx-2 overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-[15px]">
-              <thead>
-                <tr className="text-sm text-ink-soft">
-                  <th className="px-2 pb-2 font-bold">Need</th>
-                  <th className="px-2 pb-2 font-bold">Type</th>
-                  <th className="px-2 pb-2 font-bold">Amount</th>
-                  <th className="px-2 pb-2 font-bold">Status</th>
-                  <th className="px-2 pb-2 font-bold">Covered by</th>
-                  <th className="px-2 pb-2">
-                    <span className="sr-only">Actions</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {gaps.needs.map((r) => {
-                  const n = needById.get(r.need_id)
-                  const expanded = openNeed === r.need_id
-                  return (
-                    <Fragment key={r.need_id}>
-                    <tr className="border-t border-[#F0EDE6]">
-                      <td className="px-2 py-3 font-bold">{r.title}
-                        {n && CONTRIBUTOR_TYPES.includes(n.type) && r.state === 'open' && scheduleIssue(n.slot_start, n.slot_end) && (
-                          <p className="mt-1 text-sm font-normal text-warning">{scheduleIssue(n.slot_start, n.slot_end) === 'ended' ? 'Schedule ended. Update it to accept contributors.' : 'Schedule required before contributors can apply.'}</p>
-                        )}
+          {/* A table on wider screens; on phones each need becomes a labelled card */}
+          <table className="block w-full text-left text-[15px] sm:table">
+            <thead className="hidden sm:table-header-group">
+              <tr className="text-sm text-ink-soft">
+                <th className="px-2 pb-2 font-bold">Need</th>
+                <th className="px-2 pb-2 font-bold">Type</th>
+                <th className="px-2 pb-2 font-bold">Amount</th>
+                <th className="px-2 pb-2 font-bold">Status</th>
+                <th className="px-2 pb-2 font-bold">Covered by</th>
+                <th className="px-2 pb-2">
+                  <span className="sr-only">Details</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="block sm:table-row-group">
+              {gaps.needs.map((r) => {
+                const n = needById.get(r.need_id)
+                const expanded = openNeed === r.need_id
+                const issue = n && r.state === 'open' && CONTRIBUTOR_TYPES.includes(n.type) ? scheduleIssue(n.slot_start, n.slot_end) : null
+                return (
+                  <Fragment key={r.need_id}>
+                    <tr className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-[#F0EDE6] py-3 sm:table-row sm:py-0">
+                      <td className="col-span-2 px-2 font-bold sm:py-3">{r.title}</td>
+                      <td className="px-2 sm:py-3">
+                        <span className="block text-sm text-ink-soft sm:hidden">Type</span>
+                        {NEED_TYPE_LABEL[r.type]}
                       </td>
-                      <td className="px-2 py-3">{NEED_TYPE_LABEL[r.type]}</td>
-                      <td className="px-2 py-3">{n ? needAmount(n) : qtyText(r)}</td>
-                      <td className="px-2 py-3">{gapPill(r)}</td>
-                      <td className="px-2 py-3">
-                        {/* Opens the requests sent for this need, and a sponsor search */}
+                      <td className="px-2 sm:py-3">
+                        <span className="block text-sm text-ink-soft sm:hidden">Amount</span>
+                        {n ? needAmount(n) : qtyText(r)}
+                      </td>
+                      <td className="px-2 sm:py-3">
+                        <span className="block text-sm text-ink-soft sm:hidden">Status</span>
+                        <div className="flex flex-col items-start gap-1.5">
+                          {gapPill(r)}
+                          {issue && (
+                            <span className="inline-flex items-center gap-1 text-sm font-bold text-warning">
+                              <TriangleAlert className="size-4" aria-hidden />
+                              {issue === 'ended' ? 'Schedule ended' : 'Needs a schedule'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-2 sm:py-3">
+                        <span className="block text-sm text-ink-soft sm:hidden">Covered by</span>
+                        {r.covered_by ? <span className="font-semibold">{r.covered_by}</span> : <span className="text-ink-soft">{r.note}</span>}
+                      </td>
+                      <td className="col-span-2 px-2 sm:py-3 sm:text-right">
                         <button
                           type="button"
                           aria-expanded={expanded}
-                          aria-controls={`requests-${r.need_id}`}
+                          aria-controls={`need-details-${r.need_id}`}
                           onClick={() => setOpenNeed(expanded ? null : r.need_id)}
-                          className={`inline-flex min-h-11 items-center gap-1 text-left underline underline-offset-2 ${
-                            r.covered_by ? 'font-semibold' : 'text-accent font-semibold'
-                          }`}
+                          className={`${smallBtn.secondary} w-full whitespace-nowrap sm:w-auto`}
                         >
-                          {r.covered_by ?? (r.note === 'No requests yet' ? 'No requests yet · find a sponsor' : r.note)}
-                          <ChevronDown className={`size-4 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden />
+                          {expanded ? 'Hide' : 'Details'}
+                          <span className="sr-only"> for {r.title}</span>
+                          <ChevronDown className={`size-4 transition-transform ${expanded ? 'rotate-180' : ''}`} aria-hidden />
                         </button>
-                      </td>
-                      <td className="px-2 py-3 text-right">
-                        {n && r.state === 'open' && CONTRIBUTOR_TYPES.includes(n.type) && (
-                          <button type="button" className="min-h-11 px-2 font-bold text-accent underline" onClick={() => setScheduling(n)}>
-                            {scheduleIssue(n.slot_start, n.slot_end) ? 'Set schedule' : 'Edit schedule'}<span className="sr-only"> for {n.title}</span>
-                          </button>
-                        )}
-                        {r.state === 'open' && r.note === 'No requests yet' && (
-                          <button
-                            type="button"
-                            className="min-h-11 px-2 text-[15px] font-bold text-warning underline underline-offset-2"
-                            onClick={() => confirm(`Remove “${r.title}”?`) && remove.mutate(r.need_id)}
-                          >
-                            Remove<span className="sr-only"> {r.title}</span>
-                          </button>
-                        )}
                       </td>
                     </tr>
                     {expanded && project && (
-                      <tr id={`requests-${r.need_id}`}>
-                        <td colSpan={6} className="px-2 pb-4">
-                          <NeedRequestsPanel project={project} needId={r.need_id} needTitle={r.title} />
+                      <tr id={`need-details-${r.need_id}`} className="block sm:table-row">
+                        <td colSpan={6} className="block px-2 pb-4 sm:table-cell">
+                          <NeedRequestsPanel
+                            project={project}
+                            needId={r.need_id}
+                            needTitle={r.title}
+                            actions={
+                              <NeedActions
+                                need={n}
+                                row={r}
+                                issue={issue}
+                                onSchedule={() => n && setScheduling(n)}
+                                onRemove={() => {
+                                  remove.reset()
+                                  setRemoving({ id: r.need_id, title: r.title })
+                                }}
+                              />
+                            }
+                          />
                         </td>
                       </tr>
                     )}
-                    </Fragment>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          {remove.isError && <p className="mt-2 font-bold text-warning">{errText(remove.error)}</p>}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+          <ConfirmDialog
+            open={!!removing}
+            title={`Remove “${removing?.title ?? ''}”?`}
+            confirmLabel={remove.isPending ? 'Removing…' : 'Yes, remove this need'}
+            cancelLabel="Keep it"
+            busy={remove.isPending}
+            error={remove.isError ? errText(remove.error) : null}
+            onClose={() => setRemoving(null)}
+            onConfirm={() =>
+              removing &&
+              remove.mutate(removing.id, {
+                onSuccess: () => {
+                  setRemoving(null)
+                  setOpenNeed(null)
+                },
+              })
+            }
+          >
+            The need disappears from the project. You can add it again later with “Add a need”.
+          </ConfirmDialog>
           <p className="mt-4 rounded-[10px] bg-[#FDF3E8] px-4 py-3">
             <strong>{gaps.summary.startsWith('Still needed') ? 'Still needed:' : ''}</strong>{' '}
             {gaps.summary.replace(/^Still needed: /, '')}
@@ -252,6 +288,59 @@ function NeedsCard({ projectId }: { projectId: string }) {
       )}
       {scheduling && <NeedScheduleDialog key={scheduling.id} need={scheduling} projectId={projectId} onClose={() => setScheduling(null)} />}
     </Card>
+  )
+}
+
+/**
+ * The actions for one need, shown when its row is opened: set or edit the
+ * contributor schedule, and remove a need nobody has been asked about yet.
+ */
+function NeedActions({
+  need,
+  row,
+  issue,
+  onSchedule,
+  onRemove,
+}: {
+  need: Need | undefined
+  row: GapRow
+  issue: ReturnType<typeof scheduleIssue> | null
+  onSchedule: () => void
+  onRemove: () => void
+}) {
+  const canSchedule = !!need && row.state === 'open' && CONTRIBUTOR_TYPES.includes(need.type)
+  const canRemove = row.state === 'open' && row.note === 'No requests yet'
+  if (!canSchedule && !canRemove) return null
+  return (
+    <section aria-label={`Actions for ${row.title}`} className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2DED5] pb-4">
+      <div className="flex flex-wrap items-center gap-3">
+        {canSchedule && (
+          <>
+            {issue && (
+              <p className="flex items-center gap-1.5 text-[15px] text-warning">
+                <TriangleAlert className="size-4 shrink-0" aria-hidden />
+                {issue === 'ended'
+                  ? 'The schedule has ended. Update it to accept contributors.'
+                  : 'Set a schedule before contributors can apply.'}
+              </p>
+            )}
+            <button type="button" className={issue ? smallBtn.primary : smallBtn.secondary} onClick={onSchedule}>
+              <Clock3 className="size-4" aria-hidden />
+              {issue ? 'Set schedule' : 'Edit schedule'}
+            </button>
+          </>
+        )}
+      </div>
+      {canRemove && (
+        <button
+          type="button"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-[15px] font-bold text-warning hover:bg-[#FBEBDD]"
+          onClick={onRemove}
+        >
+          <Trash2 className="size-4" aria-hidden /> Remove need
+        </button>
+      )}
+    </section>
   )
 }
 

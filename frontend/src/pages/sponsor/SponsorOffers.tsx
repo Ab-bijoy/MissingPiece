@@ -54,7 +54,7 @@ export default function SponsorOffers() {
             No offers yet. Open a request in your <Link to="/sponsor" className="font-bold text-accent">inbox</Link> to make one.
           </EmptyNote>
         ) : (
-          <div className="-mx-2 overflow-x-auto">
+          <div className="relative -mx-2 overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-[15px]">
               <thead>
                 <tr className="text-sm text-ink-soft">

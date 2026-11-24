@@ -14,6 +14,9 @@
   body {
     @apply bg-paper font-sans text-ink antialiased;
     font-size: 17px;
+    /* Safety net: nothing may make the page scroll sideways on a phone.
+       `clip` (not `hidden`) keeps sticky headers working. */
+    overflow-x: clip;
   }
   :focus-visible {
     outline: 3px solid var(--color-coral);

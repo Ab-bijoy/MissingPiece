@@ -1,19 +1,19 @@
 const STEPS = [
   {
     title: 'List what you need',
-    body: 'Money, products, skills, time, equipment or space, each in your own units: BDT, packs, hours, a hall for an evening.',
+    body: 'Write down what your project is missing: money, items, skills, volunteer time, equipment or a place. Use the amounts you already use, like taka, packs, hours or one evening in a hall.',
   },
   {
     title: 'Ask the right sponsors',
-    body: 'MissingPiece suggests companies that fit, with a reason for each. Send requests to up to five of them.',
+    body: 'We suggest companies that are a good match and tell you why. You can send a request to up to five of them.',
   },
   {
     title: 'Track every offer',
-    body: 'Each offer moves from offered to accepted to received. One offer covers one whole need, so nothing is left half done.',
+    body: 'Watch each offer go from offered, to accepted, to received. A sponsor always gives the full amount for a need, never just part of it.',
   },
   {
     title: 'Close it out',
-    body: 'When everything has arrived, complete the project. Sponsors get a report with totals only, never personal details.',
+    body: 'When everything has arrived, mark the project as done. Sponsors get a short report with the totals. Nobody’s personal details are shared.',
   },
 ]
 
@@ -47,8 +47,8 @@ export default function HowItWorks() {
           <div>
             <h3 className="font-display text-4xl font-extrabold text-white">Money you can follow</h3>
             <p className="mt-4 text-lg leading-relaxed text-sand-light/85">
-              Sponsor money goes through MissingPiece. The project receives the full amount offered. A 5% fee is added
-              on top and shown before anyone pays.
+              Sponsors pay through MissingPiece, and your project gets every taka they offered. We add a small 5% fee on
+              top, and the sponsor sees it before paying.
             </p>
           </div>
           <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-3 rounded-2xl bg-white/8 p-6 text-lg ring-1 ring-white/10 sm:p-8">

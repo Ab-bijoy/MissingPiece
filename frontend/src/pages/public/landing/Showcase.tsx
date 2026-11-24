@@ -110,8 +110,8 @@ export default function Showcase() {
             See what's still missing, at a glance
           </h2>
           <p className="mt-6 max-w-lg text-lg leading-relaxed text-sand-light/85">
-            List your needs once. MissingPiece shows what is open, what a sponsor has covered and what has actually
-            arrived, and warns you when two offers clash.
+            Write your needs once. Then see at a glance what is still missing, what a sponsor has promised and what has
+            already arrived. We also warn you when two offers can’t both be accepted.
           </p>
           <div className="mt-9 flex flex-wrap gap-3">
             <Link
