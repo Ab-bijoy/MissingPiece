@@ -4,7 +4,9 @@
 
 MissingPiece helps an organization turn a program idea into a supported event. Organizers publish programs and explain what they need; community members join or offer practical help; sponsors provide funding or resources; administrators verify organizations and review moderated content.
 
-The project combines a React frontend, a FastAPI backend, PostgreSQL application data, Supabase authentication, and AI services for content moderation and sponsor recommendations. It includes separate experiences for general users, organizers, sponsors, and administrators.
+The project combines a React frontend, a FastAPI backend, PostgreSQL application data hosted on **Amazon RDS**, Supabase authentication, and AI services for content moderation and sponsor recommendations. It includes separate experiences for general users, organizers, sponsors, and administrators.
+
+The deployed frontend uses **AWS Amplify**, while the API runs on **Amazon EC2**. The application database has moved from Alwaysdata in France to **Amazon RDS in Sydney (`ap-southeast-2`)**, the same region as the API. The [recorded load test](#load-test-results-after-the-rds-migration) shows approximately 75% lower median response time for the tested visitor workload.
 
 ## Contents
 
@@ -18,6 +20,9 @@ The project combines a React frontend, a FastAPI backend, PostgreSQL application
 - [Configuration reference](#configuration-reference)
 - [API overview](#api-overview)
 - [Testing and verification](#testing-and-verification)
+- [Load-test results after the RDS migration](#load-test-results-after-the-rds-migration)
+- [Vulnerability assessment](#vulnerability-assessment)
+- [Assessment reports](#assessment-reports)
 - [Deployment and maintenance](#deployment-and-maintenance)
 - [Troubleshooting](#troubleshooting)
 - [Current design boundaries](#current-design-boundaries)
@@ -112,10 +117,10 @@ Gateway confirmation is validated by the backend before money is treated as rece
 
 ```mermaid
 flowchart TD
-    Browser[React frontend] -->|Sign in and access token| Auth[Supabase Auth]
-    Browser -->|HTTPS API requests with Bearer token| API[FastAPI backend]
+    Browser[React frontend on AWS Amplify] -->|Sign in and access token| Auth[Supabase Auth]
+    Browser -->|HTTPS API requests with Bearer token| API[FastAPI on Amazon EC2 - Sydney]
     API -->|Verify identity| Auth
-    API -->|SQLAlchemy transactions| DB[(PostgreSQL)]
+    API -->|SQLAlchemy transactions - same AWS region| DB[(Amazon RDS PostgreSQL - Sydney)]
     API -->|Registration documents| Storage[Supabase Storage]
     API -->|Moderation and sponsor ranking| AI[Groq]
     API -->|Checkout and payment verification| Gateway[SSLCommerz or mock provider]
@@ -128,7 +133,8 @@ flowchart TD
 | Frontend | React 19, TypeScript, Vite, React Router, Tailwind CSS, and Lucide icons. |
 | Frontend data | TanStack Query for fetching, caching, invalidation, and background refresh; Supabase Auth client for sessions. |
 | Backend | Python, FastAPI, Pydantic settings and validation, and Uvicorn. |
-| Persistence | PostgreSQL, SQLAlchemy 2, psycopg 3, and Alembic migrations. |
+| Persistence | Amazon RDS for PostgreSQL in production; SQLAlchemy 2, psycopg 3, and Alembic migrations. Local development can use a separate PostgreSQL instance. |
+| Hosting | AWS Amplify for the frontend; Amazon EC2 and Amazon RDS in Sydney (`ap-southeast-2`) for the API and application database. |
 | Identity and files | Supabase Auth and Supabase Storage. |
 | AI | Groq API with structured responses; default model `openai/gpt-oss-20b`. |
 | Payments and email | Mock/SSLCommerz payment services and SMTP notifications. |
@@ -139,6 +145,8 @@ The frontend uses lazy page loading and query caching to avoid unnecessary work.
 The backend uses batched loading, database indexes, connection pooling, and transaction management to reduce repeated queries and unnecessary database round trips. Network distance to PostgreSQL, authentication services, AI, and payment providers can still affect response time.
 
 ## Database design
+
+**Current deployment:** Amazon RDS for PostgreSQL replaces the previous Alwaysdata database. The migration report records PostgreSQL **18.3** on a **`db.t4g.micro`** instance in Sydney, replacing PostgreSQL **17.12** in France. It reports a full data copy, including 27 users, 12 projects, and 33 offers; these are migration-time counts, not live totals. Supabase continues to handle authentication and document storage; it is not the application database.
 
 The schema contains **19 application tables**, plus Alembic's migration-version table. Create and update the schema through migrations rather than manually creating tables.
 
@@ -244,6 +252,7 @@ MissingPiece/
 │   ├── public/
 │   └── package.json
 ├── loadtest/locustfile.py      # Optional read-oriented API load test
+├── reports/                   # Recorded load-test and vulnerability assessments
 ├── .github/workflows/         # Automated checks and fork synchronization
 ├── LICENSE
 └── README.md
@@ -375,7 +384,7 @@ See [backend settings](backend/app/config.py) and [frontend environment handling
 
 | Variable/group | Purpose |
 | --- | --- |
-| `DATABASE_URL` | PostgreSQL application database connection. Plain `postgresql://` URLs are accepted. |
+| `DATABASE_URL` | PostgreSQL application database connection: Amazon RDS in production, a separate database for development/testing. Plain `postgresql://` URLs are accepted. |
 | `SUPABASE_URL`, `SUPABASE_JWT_SECRET`, `SUPABASE_JWKS_URL` | Backend identity verification settings. |
 | `SUPABASE_JWT_AUDIENCE` | Expected token audience; defaults to `authenticated`. |
 | `SUPABASE_SERVICE_ROLE_KEY`, `STORAGE_BUCKET` | Backend-only document storage and provisioning access. |
@@ -483,7 +492,105 @@ locust -f loadtest/locustfile.py --host http://localhost:8000
 
 Open `http://localhost:8089`. The script documents `LOCUST_SUPABASE_URL`, `LOCUST_SUPABASE_ANON_KEY`, and the role-specific test-account environment variables. Without authentication configuration, it runs visitor traffic only. Measure against a controlled environment using an intentional load level; there is no universal latency or throughput guarantee.
 
+## Load-test results after the RDS migration
+
+On **24 November 2026**, the project compared visitor traffic before and after moving the application database from **Alwaysdata, France**, to **Amazon RDS, Sydney**, alongside the EC2 API server. According to the supplied report, the code, API server, test scenario, and laptop in Bangladesh were unchanged; the run durations differed.
+
+### Test conditions
+
+| Setting | Before: Alwaysdata | After: Amazon RDS |
+| --- | --- | --- |
+| Tool and workload | Locust, logged-out visitors | Locust, logged-out visitors |
+| Concurrent simulated users | 25 | 25 |
+| Wait between actions | 1–3 seconds | 1–3 seconds |
+| Run duration | Approximately 7 minutes | 5 minutes |
+| Total requests | 3,397 | 5,268 |
+| Endpoints exercised | Public feed, program comments, health check | Same visitor endpoints |
+
+### Recorded results
+
+| Metric | Before | After | Change |
+| --- | --- | --- | --- |
+| Overall median response | 1,100 ms | 280 ms | Approximately 75% lower |
+| Overall average response | 1,004 ms | 293 ms | Approximately 71% lower |
+| Overall 95th percentile | 1,500 ms | 310 ms | Approximately 79% lower |
+| Overall 99th percentile | 2,600 ms | 570 ms | Approximately 78% lower |
+| Throughput | 7.95 requests/s | 17.63 requests/s | Approximately 2.2× |
+| Failed requests | 0 / 3,397 | 0 / 5,268 | 0% in both runs |
+| API-server-to-database `SELECT 1` round trip | 259 ms | 0.5 ms | Reported separately from HTTP requests |
+
+| Endpoint | Median before → after | 95th percentile before → after |
+| --- | --- | --- |
+| `GET /api/feed` | 1,100 → 290 ms | 1,800 → 350 ms |
+| `GET /api/events/{project_id}/comments` | 1,000 → 280 ms | 1,400 → 290 ms |
+| `GET /api/health` | 280 → 280 ms | 280 → 280 ms |
+
+**Interpretation:** placing the API and database in the same region removed much of the database network delay in this workload. The health endpoint does not query the database and remained at about 280 ms, consistent with a substantial client-to-server network baseline. The report estimates roughly 10 ms of additional feed processing by subtracting endpoint medians; this is an approximation, not a direct server-side trace.
+
+Throughput increased because each simulated visitor waits for a response before continuing. These results demonstrate improvement under the recorded **25-user, read-only visitor workload**; they do not establish maximum server capacity or measure logged-in writes, contributor approvals, AI calls, payment processing, or browser rendering. Runs with 50 and 100 users and representative authenticated workflows remain follow-up work.
+
+Read the [complete load-test report (Markdown)](reports/missingpiece-load-test-report.md) or [load-test report (PDF)](reports/load-test.pdf) for the detailed measurements. These are supplied test records, not a new test run performed as part of this documentation update.
+
+## Vulnerability assessment
+
+A **Tenable Nessus** report assessed the deployed frontend host, `main.dzf2edfmr40g0.amplifyapp.com`, on **24 November 2026**, from **13:22:56 to 13:53:49 Bangladesh Standard Time (UTC+6)**.
+
+| Severity | Findings reported |
+| --- | --- |
+| Critical | 0 |
+| High | 0 |
+| Medium | 1 |
+| Low | 0 |
+| Informational | 0 |
+
+### Reported finding: missing HSTS header
+
+| Field | Reported detail |
+| --- | --- |
+| Nessus plugin | `142960` — HSTS Missing From HTTPS Server (RFC 6797) |
+| Affected service | Frontend HTTPS response on TCP port 443 |
+| Severity | Medium |
+| CVSS v3.0 base score | 6.5 |
+| Evidence | The captured response did not include `Strict-Transport-Security`. |
+| Report recommendation | Configure the HTTPS server to send HSTS. |
+| Verification status | Present in the supplied scan; no remediation or successful retest is documented in the supplied files. |
+
+The report identifies missing browser enforcement of HTTPS and associated downgrade/SSL-stripping risk. Track the hosting-header correction and a subsequent scan before marking this finding resolved.
+
+**Scope:** these counts describe the findings in this report for the frontend hostname. They do not certify the entire application as vulnerability-free or demonstrate an assessment of backend authorization, payment logic, AI services, or the RDS database. The scan predates the recorded post-migration load test and is not evidence of RDS security validation.
+
+See the [full vulnerability-assessment PDF](reports/missingpiece-vulnerability-assessment.pdf) for the scanner evidence.
+
+## Assessment reports
+
+The supplied reports are preserved in the repository so these links also work when browsing the project on GitHub.
+
+| Report | Format | Contents |
+| --- | --- | --- |
+| [Load-test report](reports/load-test.pdf) | PDF | Before/after database migration measurements and endpoint latency tables. |
+| [Load-test report, text version](reports/missingpiece-load-test-report.md) | Markdown | Test setup, detailed results, migration context, and conclusions. |
+| [Vulnerability assessment](reports/missingpiece-vulnerability-assessment.pdf) | PDF | Nessus scan scope, severity counts, and missing-HSTS evidence. |
+
 ## Deployment and maintenance
+
+### Current AWS deployment and RDS configuration
+
+| Component | Deployment |
+| --- | --- |
+| Frontend | AWS Amplify: [MissingPiece web app](https://main.dzf2edfmr40g0.amplifyapp.com/) |
+| Backend API | Amazon EC2, Sydney (`ap-southeast-2`) |
+| Application database | Amazon RDS for PostgreSQL, Sydney (`ap-southeast-2`), replacing Alwaysdata |
+| Authentication and registration documents | Supabase Auth and Supabase Storage |
+
+The backend selects its database through `DATABASE_URL`; the frontend continues to call the API and never connects directly to RDS. Configure the deployed backend with the RDS connection details supplied by the deployment environment. A placeholder URL has this shape:
+
+```dotenv
+DATABASE_URL=postgresql://YOUR_DB_USER:YOUR_URL_ENCODED_PASSWORD@YOUR_RDS_ENDPOINT:5432/YOUR_DB_NAME
+```
+
+Use the deployment's required TLS connection parameters and certificate configuration. Keep the real endpoint, credentials, and connection configuration in backend environment settings, outside version control. The local-installation example intentionally uses `localhost`; developer machines and automated tests must use their own databases rather than the production RDS database.
+
+Continue to manage the schema through Alembic. Moving to RDS changes database hosting, not the application's table model or the separation between PostgreSQL business records and Supabase identity. The migration and extension permissions described in [Database design](#database-design) still apply.
 
 ### Build and runtime configuration
 
