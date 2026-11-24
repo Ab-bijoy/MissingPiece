@@ -253,7 +253,7 @@ export function handleOrganizer(method: string, path: string, body: unknown, me:
     }
   }
 
-  g = m(/^\/projects\/([^/]+)\/(publish|complete|gaps|readiness|needs|sponsor-matches|requests|offers|bookings|report)$/)
+  g = m(/^\/projects\/([^/]+)\/(publish|complete|gaps|readiness|needs|sponsor-matches|requests|offers|bookings|report|memberships)$/)
   if (g) {
     const o = own(g[1])
     if ('err' in o) return o.err
@@ -325,6 +325,15 @@ export function handleOrganizer(method: string, path: string, body: unknown, me:
       data.matches.filter((x) => x.project_id === proj.id && x.sponsor_id === b.sponsor_id).forEach((x) => (x.status = 'requested'))
       notify(b.sponsor_id, 'request_received', r.id, `${me.name} sent you a request for ${need.title} (${proj.name}).`)
       return done(ok({ id: r.id, thread_id: th.id }, 201))
+    }
+    if (what === 'memberships' && method === 'GET') {
+      return ok(data.memberships.filter((m) => m.project_id === proj.id).map((m) => {
+        const offer = data.offers.find((o) => o.id === m.offer_id)
+        const need = data.needs.find((n) => n.id === offer?.need_id)
+        return { ...m, name: nameOf(m.user_id), offer_stage: offer?.stage ?? null,
+          contribution_role: offer?.contribution_role ?? null, need_title: need?.title ?? null,
+          slot_start: offer?.slot_start ?? null, slot_end: offer?.slot_end ?? null }
+      }))
     }
     if (what === 'offers') {
       const offers = data.offers
@@ -415,9 +424,28 @@ export function handleOrganizer(method: string, path: string, body: unknown, me:
     const owned = own(mb.project_id)
     if ('err' in owned) return owned.err
     const p = owned.p
-    mb.status = g[2] === 'approve' ? 'approved' : 'rejected'
     const offer = data.offers.find((x) => x.id === mb.offer_id)
-    if (offer && g[2] === 'reject') offer.stage = 'declined'
+    if (mb.role !== 'contributor' || !offer) return fail(409, 'Only contributor applications can be reviewed here.', 'not_contributor')
+    const approving = g[2] === 'approve'
+    if (mb.status === (approving ? 'approved' : 'rejected') && offer.stage === (approving ? 'accepted' : 'declined')) return ok(undefined, 204)
+    if (!['offered', 'accepted'].includes(offer.stage)) return fail(409, 'This application is no longer awaiting a decision.', 'invalid_stage')
+    const need = data.needs.find((n) => n.id === offer.need_id)!
+    if (approving) {
+      if (mb.status === 'rejected') return fail(409, 'The contributor must apply again.', 'invalid_stage')
+      if (offer.stage === 'offered' && need.status !== 'open') return fail(409, 'This need is already covered.', 'need_covered')
+      if (!offer.slot_end || new Date(offer.slot_end) <= new Date()) return fail(409, 'The contribution time slot has ended.', 'invalid_slot')
+      offer.stage = 'accepted'
+      need.status = 'covered'
+      data.offers.filter((o) => o.need_id === need.id && o.id !== offer.id && o.stage === 'offered').forEach((o) => {
+        o.stage = 'declined'
+        const other = data.memberships.find((m) => m.offer_id === o.id)
+        if (other) other.status = 'rejected'
+      })
+    } else {
+      if (offer.stage === 'accepted') need.status = 'open'
+      offer.stage = 'declined'
+    }
+    mb.status = approving ? 'approved' : 'rejected'
     notify(mb.user_id, g[2] === 'approve' ? 'membership_approved' : 'membership_rejected', mb.id,
       g[2] === 'approve' ? `You are in! ${p.name} approved your offer to help.` : `${p.name} could not use your help this time.`)
     return done(ok(undefined, 204))

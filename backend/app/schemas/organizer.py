@@ -238,6 +238,11 @@ class ProjectMemberOut(Schema):
     role: str
     status: str
     offer_id: uuid.UUID | None = None
+    offer_stage: str | None = None
+    contribution_role: str | None = None
+    need_title: str | None = None
+    slot_start: datetime | None = None
+    slot_end: datetime | None = None
 
 
 class CommentModerationOut(Schema):

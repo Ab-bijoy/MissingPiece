@@ -2,6 +2,26 @@
 
 ## Community API
 
+### Contributor approval
+
+The organizer dashboard shows **Contributor applications** above its other panels.
+`GET /api/projects/{id}/memberships` includes the linked offer stage, need title,
+contribution role and time slot. Loading errors are shown separately from an empty
+list. Applications refresh every 30 seconds and after each decision.
+
+Approve/reject membership endpoints now update the linked offer in the same
+transaction. Approval creates the time/resource booking and covers the need;
+rejection declines the offer and releases any booking. The existing one accepted
+offer per need rule remains: other offers for that need and their contributor
+memberships are rejected together. Direct offer accept/decline uses the same
+contributor decision logic. Booking conflicts roll back the entire decision,
+and retries do not create duplicate bookings or notifications. Withdrawn, expired,
+received and closed-program applications cannot be newly approved.
+
+Old incomplete decisions are shown for organizer confirmation; no historical
+applications are approved or rejected automatically. No database migration is
+needed for this change.
+
 The community routes use the existing `app_user`, `project`, `need`, `offer`,
 `event_membership`, `comment`, `booking`, and `notification` tables. Migration
 `c031_community` adds query indexes; it does not reset or replace existing data.

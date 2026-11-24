@@ -15,6 +15,7 @@ import type {
   ProjectInput,
   ProjectReport,
   ProjectSummary,
+  ProjectMember,
   Readiness,
   RequestInput,
   SentRequest,
@@ -61,6 +62,7 @@ export const organizerApi = {
   receiveOffer: (id: string) => api<void>(`/offers/${id}/receive`, { method: 'POST' }),
 
   approveMembership: (id: string) => api<void>(`/memberships/${id}/approve`, { method: 'POST' }),
+  memberships: (id: string) => api<ProjectMember[]>(`/projects/${id}/memberships`),
   rejectMembership: (id: string) => api<void>(`/memberships/${id}/reject`, { method: 'POST' }),
 
   setBenefit: (id: string, given: boolean) => api<Benefit>(`/benefits/${id}`, { method: 'PATCH', json: { given } }),
@@ -90,6 +92,7 @@ export const qk = {
   readiness: (id: string) => ['project', id, 'readiness'] as const,
   matches: (id: string) => ['project', id, 'matches'] as const,
   offers: (id: string) => ['project', id, 'offers'] as const,
+  memberships: (id: string) => ['project', id, 'memberships'] as const,
   comments: (id: string) => ['project', id, 'comments'] as const,
   report: (id: string) => ['project', id, 'report'] as const,
   requests: (id: string) => ['project', id, 'requests'] as const,
@@ -109,6 +112,7 @@ export const useReadiness = (id: string) =>
 export const useMatches = (id: string, enabled = true) =>
   useQuery({ queryKey: qk.matches(id), queryFn: () => organizerApi.matches(id), enabled })
 export const useOffers = (id: string) => useQuery({ queryKey: qk.offers(id), queryFn: () => organizerApi.offers(id) })
+export const useProjectMemberships = (id: string) => useQuery({ queryKey: qk.memberships(id), queryFn: () => organizerApi.memberships(id), refetchInterval: 30_000 })
 export const useComments = (id: string) =>
   useQuery({ queryKey: qk.comments(id), queryFn: () => organizerApi.comments(id) })
 export const useSponsorPublicProfile = (id: string | null) =>
@@ -153,6 +157,9 @@ export function useProjectAction<TVars>(projectId: string, fn: (vars: TVars) => 
       void qc.invalidateQueries({ queryKey: qk.myProjects })
       void qc.invalidateQueries({ queryKey: qk.threads })
       void qc.invalidateQueries({ queryKey: qk.notifications })
+      void qc.invalidateQueries({ queryKey: ['user', 'memberships'] })
+      void qc.invalidateQueries({ queryKey: ['user', 'feed'] })
+      void qc.invalidateQueries({ queryKey: ['user', 'program', projectId] })
     },
   })
 }

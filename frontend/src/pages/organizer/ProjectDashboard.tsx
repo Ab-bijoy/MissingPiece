@@ -9,6 +9,7 @@ import {
   useMyProjects,
   useOffers,
   useProject,
+  useProjectMemberships,
   useProjectAction,
   useReadiness,
 } from '../../api/organizer'
@@ -48,6 +49,7 @@ export default function ProjectDashboard() {
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
       <Header project={p} />
       {p.status === 'draft' && <DraftBanner project={p} />}
+      <Contributors projectId={p.id} />
       <ReadinessRow projectId={p.id} />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -56,7 +58,6 @@ export default function ProjectDashboard() {
         </div>
         <aside className="flex flex-col gap-6">
           {p.status === 'live' && <Suggestions project={p} />}
-          <Contributors projectId={p.id} />
           <Questions projectId={p.id} />
         </aside>
       </div>
@@ -434,32 +435,41 @@ function AddNeedDialog({ projectId, open, onClose }: { projectId: string; open: 
 }
 
 function Contributors({ projectId }: { projectId: string }) {
-  const { data } = useOffers(projectId)
+  const { data, isPending, error, refetch, isFetching } = useProjectMemberships(projectId)
   const act = useProjectAction(projectId, ({ id, ok }: { id: string; ok: boolean }) =>
     ok ? organizerApi.approveMembership(id) : organizerApi.rejectMembership(id),
   )
-  const waiting = data?.offers.filter((o) => o.contribution_role && o.membership_status === 'pending') ?? []
+  const waiting = (data ?? []).filter((m) => m.role === 'contributor' && (
+    m.status === 'pending' || m.offer_stage === 'offered' || (m.status === 'rejected' && m.offer_stage === 'accepted')
+  ))
   return (
-    <Card title="Contributors waiting">
-      {waiting.length === 0 ? (
-        <EmptyNote>No one is waiting for approval.</EmptyNote>
-      ) : (
+    <Card title={<span>Contributor applications{data && !error ? ` (${waiting.length})` : ''}</span>}
+      aside={<button type="button" className={smallBtn.secondary} disabled={isFetching} onClick={() => void refetch()}>{isFetching ? 'Refreshing…' : 'Refresh applications'}</button>}>
+      <p className="mb-3 text-sm text-ink-soft">Review people offering to help with this program. Approval reserves their time and covers the requested need.</p>
+      {isPending && <div role="status"><Spinner /><p>Loading contributor applications…</p></div>}
+      {error && <Notice tone="error">Could not load applications: {errText(error)} Use Refresh applications to try again.</Notice>}
+      {act.isError && <Notice tone="error">{errText(act.error)}</Notice>}
+      {act.isSuccess && <Notice tone="success">Application {act.variables.ok ? 'approved' : 'rejected'}. The contributor’s offer has been updated.</Notice>}
+      {!isPending && !error && waiting.length === 0 && <EmptyNote>No contributor applications are waiting for review.</EmptyNote>}
+      {!isPending && !error && waiting.length > 0 && (
         <ul className="flex flex-col gap-3">
           {waiting.map((o) => (
             <li key={o.id} className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="font-bold">{o.from_name}</div>
+                <div className="font-bold">{o.name}</div>
                 <div className="text-[15px] text-ink-soft">
-                  {o.contribution_role === 'trainer' ? 'Trainer' : o.need_title}
+                  {o.contribution_role === 'trainer' ? 'Trainer' : 'Contributor'} · {o.need_title ?? 'Need unavailable'}
                   {slotText(o.slot_start, o.slot_end) ? `, ${slotText(o.slot_start, o.slot_end)}` : ''}
                 </div>
+                {o.status !== 'pending' && <p className="text-sm text-warning">A previous decision was incomplete. Confirm the {o.status === 'approved' ? 'approval' : 'rejection'} to synchronize this application.</p>}
+                {(!o.offer_id || !['offered', 'accepted'].includes(o.offer_stage ?? '')) && <p className="text-sm text-warning">This offer is no longer available for review.</p>}
               </div>
               <div className="flex gap-2">
-                <button type="button" className={smallBtn.primary} disabled={act.isPending} onClick={() => act.mutate({ id: o.membership_id!, ok: true })}>
-                  Approve<span className="sr-only"> {o.from_name}</span>
+                <button type="button" className={smallBtn.primary} disabled={act.isPending || o.status === 'rejected' || !o.offer_id || !['offered', 'accepted'].includes(o.offer_stage ?? '')} onClick={() => act.mutate({ id: o.id, ok: true })}>
+                  {act.isPending && act.variables.id === o.id && act.variables.ok ? 'Approving…' : 'Approve'}<span className="sr-only"> {o.name}</span>
                 </button>
-                <button type="button" className={smallBtn.secondary} disabled={act.isPending} onClick={() => act.mutate({ id: o.membership_id!, ok: false })}>
-                  Reject<span className="sr-only"> {o.from_name}</span>
+                <button type="button" className={smallBtn.secondary} disabled={act.isPending || !o.offer_id || !['offered', 'accepted'].includes(o.offer_stage ?? '')} onClick={() => act.mutate({ id: o.id, ok: false })}>
+                  {act.isPending && act.variables.id === o.id && !act.variables.ok ? 'Rejecting…' : 'Reject'}<span className="sr-only"> {o.name}</span>
                 </button>
               </div>
             </li>

@@ -135,6 +135,21 @@ export type ReadinessCheck = {
 }
 export type Readiness = { checks: ReadinessCheck[]; can_complete: boolean }
 
+export type ProjectMember = {
+  id: string
+  project_id: string
+  user_id: string
+  name: string
+  role: 'participant' | 'contributor'
+  status: 'pending' | 'approved' | 'rejected'
+  offer_id: string | null
+  offer_stage: OfferStage | null
+  contribution_role: 'trainer' | 'contributor' | null
+  need_title: string | null
+  slot_start: string | null
+  slot_end: string | null
+}
+
 /** GET /projects/{id}/sponsor-matches. Scores are only ever shown to the organizer. */
 export type SponsorMatch = {
   id: string

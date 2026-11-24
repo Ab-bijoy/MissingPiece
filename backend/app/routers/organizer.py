@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -63,7 +63,7 @@ from app.schemas.organizer import (
     SponsorRequestOut,
     TemplateOut,
 )
-from app.services import loaders, matching
+from app.services import contributors, loaders, matching
 from app.services import organizer_views as views
 
 # All paths start with /api, like every other router (the frontend calls /api/...)
@@ -733,6 +733,13 @@ def accept_offer(offer_id: uuid.UUID, user: Organizer, db: DB):
     offer = db.get(Offer, offer_id)
     if not offer:
         raise ApiError(404, "Offer not found.", "not_found")
+    if offer.contribution_role:
+        member_id = db.scalar(select(EventMembership.id).where(EventMembership.offer_id == offer.id))
+        if member_id is None:
+            raise ApiError(409, "This contributor application is no longer active.", "stale_application")
+        contributors.decide(db, user, member_id, True)
+        offer, need, project = _get_owned_offer(db, offer_id, user.id)
+        return _serialize_offer(db, offer, need, [offer], has_receipt=False)
 
     # Rule 2: Lock the need row first inside the transaction
     need = db.scalar(select(Need).where(Need.id == offer.need_id).with_for_update())
@@ -785,6 +792,9 @@ def accept_offer(offer_id: uuid.UUID, user: Organizer, db: DB):
     )
     for other in competing_offers:
         other.stage = OfferStage.declined
+        db.execute(
+            update(EventMembership).where(EventMembership.offer_id == other.id).values(status=MembershipStatus.rejected)
+        )
         _notify(
             db,
             user_id=other.from_user_id,
@@ -823,6 +833,12 @@ def accept_offer(offer_id: uuid.UUID, user: Organizer, db: DB):
 def decline_offer(offer_id: uuid.UUID, user: Organizer, db: DB):
     _require_organizer(user)
     offer, need, project = _get_owned_offer(db, offer_id, user.id)
+    if offer.contribution_role:
+        member_id = db.scalar(select(EventMembership.id).where(EventMembership.offer_id == offer.id))
+        if member_id is None:
+            raise ApiError(409, "This contributor application is no longer active.", "stale_application")
+        contributors.decide(db, user, member_id, False)
+        return _serialize_offer(db, offer, need, [offer], has_receipt=False)
     if offer.stage not in (OfferStage.offered, OfferStage.accepted):
         raise ApiError(400, "This offer cannot be declined in its current stage.", "invalid_stage")
 
@@ -949,10 +965,16 @@ def update_benefit_given(benefit_id: uuid.UUID, body: BenefitGivenIn, user: Orga
 def list_project_memberships(project_id: uuid.UUID, user: Organizer, db: DB):
     _require_organizer(user)
     project = _get_owned_project(db, project_id, user.id)
-    rows = list(db.scalars(select(EventMembership).where(EventMembership.project_id == project.id)).all())
-    names = loaders.names(db, (m.user_id for m in rows))  # one query for every member's name
+    rows = db.execute(
+        select(EventMembership, Offer, Need)
+        .outerjoin(Offer, Offer.id == EventMembership.offer_id)
+        .outerjoin(Need, Need.id == Offer.need_id)
+        .where(EventMembership.project_id == project.id)
+        .order_by(EventMembership.created_at, EventMembership.id)
+    ).all()
+    names = loaders.names(db, (m.user_id for m, _, _ in rows))
     result: list[ProjectMemberOut] = []
-    for m in rows:
+    for m, offer, need in rows:
         result.append(
             ProjectMemberOut(
                 id=m.id,
@@ -962,6 +984,11 @@ def list_project_memberships(project_id: uuid.UUID, user: Organizer, db: DB):
                 role=m.role.value,
                 status=m.status.value,
                 offer_id=m.offer_id,
+                offer_stage=offer.stage.value if offer else None,
+                contribution_role=offer.contribution_role.value if offer and offer.contribution_role else None,
+                need_title=need.title if need else None,
+                slot_start=offer.slot_start if offer else None,
+                slot_end=offer.slot_end if offer else None,
             )
         )
     return result
@@ -970,20 +997,7 @@ def list_project_memberships(project_id: uuid.UUID, user: Organizer, db: DB):
 @router.post("/memberships/{membership_id}/approve", response_model=ProjectMemberOut)
 def approve_membership(membership_id: uuid.UUID, user: Organizer, db: DB):
     _require_organizer(user)
-    m = db.get(EventMembership, membership_id)
-    if not m:
-        raise ApiError(404, "Membership not found.", "not_found")
-    project = _get_owned_project(db, m.project_id, user.id)
-    m.status = MembershipStatus.approved
-    _notify(
-        db,
-        user_id=m.user_id,
-        notif_type=NotificationType.membership_approved,
-        ref_id=m.id,
-        text=f"Your {m.role.value} membership for '{project.name}' was approved.",
-    )
-    db.commit()
-    db.refresh(m)
+    m = contributors.decide(db, user, membership_id, True)
     member_user = db.get(AppUser, m.user_id)
     return ProjectMemberOut(
         id=m.id,
@@ -999,20 +1013,7 @@ def approve_membership(membership_id: uuid.UUID, user: Organizer, db: DB):
 @router.post("/memberships/{membership_id}/reject", response_model=ProjectMemberOut)
 def reject_membership(membership_id: uuid.UUID, user: Organizer, db: DB):
     _require_organizer(user)
-    m = db.get(EventMembership, membership_id)
-    if not m:
-        raise ApiError(404, "Membership not found.", "not_found")
-    project = _get_owned_project(db, m.project_id, user.id)
-    m.status = MembershipStatus.rejected
-    _notify(
-        db,
-        user_id=m.user_id,
-        notif_type=NotificationType.membership_rejected,
-        ref_id=m.id,
-        text=f"Your {m.role.value} membership for '{project.name}' was not approved.",
-    )
-    db.commit()
-    db.refresh(m)
+    m = contributors.decide(db, user, membership_id, False)
     member_user = db.get(AppUser, m.user_id)
     return ProjectMemberOut(
         id=m.id,
